@@ -171,7 +171,7 @@ function ensureSystemConfig() {
         textModels: ["default::gpt-5.5"],
         audioModels: ["default::gpt-4o-mini-tts"],
         quality: "auto",
-        size: "1:1",
+        size: "1024x1024",
         count: "1",
         canvasImageCount: "3",
     };

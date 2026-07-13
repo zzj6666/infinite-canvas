@@ -4,7 +4,7 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
-import type { AiConfig, ModelChannel } from "@/stores/use-config-store";
+import { modelOptionName, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { apiFetch, apiJson } from "./client";
 
 export type AiTextMessage = {
@@ -32,11 +32,12 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
+    if (modelOptionName(config.model || config.imageModel).toLowerCase() === "gpt-image-2" && references.length > 16) throw new Error("gpt-image-2 最多支持 16 张参考图");
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     const formData = new FormData();
     formData.set("model", config.model || config.imageModel || "");
     formData.set("prompt", requestPrompt);
-    formData.set("n", String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)))));
+    formData.set("n", String(Math.max(1, Math.min(4, Math.floor(Math.abs(Number(config.count)) || 1)))));
     if (config.quality) formData.set("quality", config.quality);
     if (config.size) formData.set("size", config.size);
     const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));

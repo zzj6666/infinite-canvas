@@ -77,9 +77,12 @@ aiRoutes.post("/images/generations", async (c) => {
     assertProviderReady(request);
     const prompt = String(body.prompt || "");
     if (!prompt.trim()) return c.json({ error: "请输入提示词" }, 400);
-    const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(body.count ?? config.count)) || 1)));
+    const isGptImage = isGptImageModel(request.model);
+    const n = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(body.count ?? config.count)) || 1)));
     const quality = body.quality || config.quality;
-    const size = body.size || config.size;
+    const size = normalizeOpenAISize(String(body.size || config.size || ""), request.model);
+    const sizeError = validateGptImage2Size(request.model, size);
+    if (sizeError) return c.json({ error: sizeError }, 400);
     const systemPrompt = config.systemPrompt?.trim();
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
 
@@ -119,8 +122,8 @@ aiRoutes.post("/images/generations", async (c) => {
             prompt: finalPrompt,
             n,
             ...(quality && quality !== "auto" ? { quality } : {}),
-            ...(size ? { size: normalizeOpenAISize(size) } : {}),
-            response_format: "b64_json",
+            ...(size ? { size } : {}),
+            ...(isGptImage ? {} : { response_format: "b64_json" }),
             output_format: "png",
         }),
     });
@@ -148,16 +151,22 @@ aiRoutes.post("/images/edits", async (c) => {
     const upstream = new FormData();
     upstream.set("model", request.model);
     upstream.set("prompt", finalPrompt);
-    upstream.set("n", String(form.get("n") || config.count || "1"));
-    upstream.set("response_format", "b64_json");
+    const isGptImage = isGptImageModel(request.model);
+    const inputImageCount = form.getAll("image").filter((value): value is File => value instanceof File).length;
+    if (isGptImage && inputImageCount > 16) return c.json({ error: "GPT Image 模型最多支持 16 张参考图" }, 400);
+    const n = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(form.get("n") || config.count)) || 1)));
+    const size = normalizeOpenAISize(String(form.get("size") || config.size || ""), request.model);
+    const sizeError = validateGptImage2Size(request.model, size);
+    if (sizeError) return c.json({ error: sizeError }, 400);
+    upstream.set("n", String(n));
+    if (!isGptImage) upstream.set("response_format", "b64_json");
     upstream.set("output_format", "png");
     const quality = form.get("quality");
-    const size = form.get("size");
-    if (quality) upstream.set("quality", String(quality));
-    if (size) upstream.set("size", normalizeOpenAISize(String(size)) || String(size));
+    if (quality && quality !== "auto") upstream.set("quality", String(quality));
+    if (size) upstream.set("size", size);
     for (const [key, value] of form.entries()) {
         if (key === "image" || key === "mask") {
-            if (value instanceof File) upstream.append(key, value);
+            if (value instanceof File) upstream.append(isGptImage && key === "image" ? "image[]" : key, value);
         }
     }
 
@@ -342,10 +351,44 @@ function seedanceTaskUrl(baseUrl: string, taskId?: string) {
     return `${base}/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`;
 }
 
-function normalizeOpenAISize(size: string) {
+function isGptImageModel(model: string) {
+    return model.toLowerCase().startsWith("gpt-image-");
+}
+
+function normalizeOpenAISize(size: string, model: string) {
     const value = size.trim();
     if (!value) return "";
+    if (model.toLowerCase() === "gpt-image-2") {
+        return (
+            {
+                "1:1": "1024x1024",
+                "3:2": "1536x1024",
+                "2:3": "1024x1536",
+                "4:3": "1360x1024",
+                "3:4": "1024x1360",
+                "16:9": "1824x1024",
+                "9:16": "1024x1824",
+            }[value] || value
+        );
+    }
     if (/^\d+x\d+$/i.test(value)) return value;
     // keep ratio strings as-is; many gateways accept them
     return value;
+}
+
+function validateGptImage2Size(model: string, size: string) {
+    if (model.toLowerCase() !== "gpt-image-2" || !size || size === "auto") return "";
+    const match = size.match(/^(\d+)x(\d+)$/i);
+    if (!match) return "gpt-image-2 的尺寸必须使用宽x高格式，例如 1024x1024";
+
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    const longEdge = Math.max(width, height);
+    const shortEdge = Math.min(width, height);
+    const pixels = width * height;
+    if (width % 16 || height % 16) return "gpt-image-2 的宽高必须是 16 的倍数";
+    if (longEdge >= 3840) return "gpt-image-2 的最长边必须小于 3840px";
+    if (longEdge / shortEdge > 3) return "gpt-image-2 的最长边与最短边比例不能超过 3:1";
+    if (pixels < 655_360 || pixels > 8_294_400) return "gpt-image-2 的总像素必须在 655,360 至 8,294,400 之间";
+    return "";
 }
