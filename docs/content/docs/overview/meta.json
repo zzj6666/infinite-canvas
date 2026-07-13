@@ -4,12 +4,10 @@
   "defaultOpen": true,
   "pages": [
     "quick-start",
-    "codex-app-plugin",
     "features",
     "render",
     "docker",
     "third-party-prompt-repositories",
-    "[在线体验](https://canvas.best/)",
-    "local-codex-canvas"
+    "[在线体验](https://canvas.best/)"
   ]
 }
