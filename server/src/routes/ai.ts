@@ -38,11 +38,15 @@ async function readUpstreamError(response: Response, fallback: string) {
     }
 }
 
-aiRoutes.get("/models", requireAdmin, async (c) => {
-    const channelId = c.req.query("channelId") || "";
-    const config = loadSystemConfig();
-    const channel = (config.channels || []).find((item) => item.id === channelId) || config.channels?.[0];
-    if (!channel) return c.json({ error: "渠道不存在" }, 404);
+aiRoutes.post("/models", requireAdmin, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== "object") return c.json({ error: "无效渠道配置" }, 400);
+    const input = body as Record<string, unknown>;
+    const channel = {
+        baseUrl: String(input.baseUrl || ""),
+        apiKey: String(input.apiKey || ""),
+        apiFormat: input.apiFormat === "gemini" ? "gemini" : "openai",
+    };
     assertProviderReady({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, model: "x" });
 
     if (channel.apiFormat === "gemini") {

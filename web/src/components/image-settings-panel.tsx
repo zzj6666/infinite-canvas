@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
-import { ConfigProvider, Switch } from "antd";
+import { type ReactNode } from "react";
+import { ConfigProvider } from "antd";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { modelOptionName, type AiConfig } from "@/stores/use-config-store";
@@ -41,12 +41,10 @@ type ImageSettingsPanelProps = {
 };
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[400px] space-y-5" }: ImageSettingsPanelProps) {
-    const [snapDimensionToStep, setSnapDimensionToStep] = useState(true);
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
-    const requiresDimensionAlignment = modelOptionName(config.model).toLowerCase() === "gpt-image-2";
-    const alignToStep = requiresDimensionAlignment || snapDimensionToStep;
+    const alignToStep = /image[-_ ]?2/i.test(modelOptionName(config.model));
     const inputDimensions = readSizeDimensions(activeSize, aspectOptions[0]);
     const selectedAspect = aspectOptions.find((item) => Object.values(item.sizes || {}).includes(activeSize) || item.value === activeSize) || closestAspect(inputDimensions.width, inputDimensions.height);
     const selectedResolution = resolutionOptions.find((item) => selectedAspect?.sizes?.[item.value] === activeSize)?.value || "1k";
@@ -106,16 +104,6 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingSection>
                 <SettingSection title="尺寸" detail={activeSize === "auto" ? "自动" : `${dimensions.width} x ${dimensions.height}`} theme={theme}>
-                    {!requiresDimensionAlignment ? (
-                        <div className="flex items-center justify-between gap-3 rounded-xl border px-2.5 py-2" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
-                            <span className="text-xs font-medium" style={{ color: theme.node.muted }}>
-                                16 倍数对齐
-                            </span>
-                            <span title="输入完成后自动向上补成 16 的倍数" onMouseDown={(event) => event.stopPropagation()}>
-                                <Switch size="small" checked={snapDimensionToStep} onChange={setSnapDimensionToStep} />
-                            </span>
-                        </div>
-                    ) : null}
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                         <DimensionInput prefix="W" value={dimensions.width} disabled={activeSize === "auto"} theme={theme} alignToStep={alignToStep} onChange={(value) => updateDimension("width", value)} />
                         <span className="text-lg opacity-45">↔</span>

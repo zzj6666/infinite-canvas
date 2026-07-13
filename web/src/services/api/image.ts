@@ -74,7 +74,7 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
 
 export async function fetchChannelModels(channel: ModelChannel) {
     const { fetchChannelModelsFromServer } = await import("./system-config");
-    const result = await fetchChannelModelsFromServer(channel.id);
+    const result = await fetchChannelModelsFromServer(channel);
     return result.models;
 }
 

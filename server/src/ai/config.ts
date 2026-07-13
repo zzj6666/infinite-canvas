@@ -9,6 +9,7 @@ export type ModelChannel = {
     apiKey: string;
     apiFormat: ApiCallFormat;
     models: string[];
+    enabled?: boolean;
 };
 
 export type SystemAiConfig = {
@@ -61,7 +62,9 @@ export function resolveModelRequestConfig(config: SystemAiConfig, value: string)
     const selected = value || config.imageModel || config.model || "";
     const { channelId, model } = decodeChannelModel(selected);
     const channels = Array.isArray(config.channels) ? config.channels : [];
-    const channel = channels.find((item) => item.id === channelId) || channels[0];
+    const selectedChannel = channels.find((item) => item.id === channelId);
+    if (selectedChannel?.enabled === false) return { model, baseUrl: "", apiKey: "", apiFormat: selectedChannel.apiFormat || "openai", systemPrompt: config.systemPrompt || "", disabled: true };
+    const channel = selectedChannel || channels.find((item) => item.enabled !== false);
     if (!channel) {
         return {
             model: modelOptionName(selected),
@@ -90,7 +93,8 @@ export function buildApiUrl(baseUrl: string, path: string) {
     return `${normalizedBase}/v1${normalizedPath}`;
 }
 
-export function assertProviderReady(request: { baseUrl: string; apiKey: string; model: string }) {
+export function assertProviderReady(request: { baseUrl: string; apiKey: string; model: string; disabled?: boolean }) {
+    if (request.disabled) throw new Error("当前渠道已关闭");
     if (!request.model.trim()) throw new Error("请先在系统配置中选择模型");
     if (!request.baseUrl.trim()) throw new Error("请先由管理员配置 Base URL");
     if (!request.apiKey.trim()) throw new Error("请先由管理员配置 API Key");

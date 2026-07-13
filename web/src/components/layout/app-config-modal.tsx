@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, Modal, Progress, Select, Tabs } from "antd";
+import { App, Button, Form, Input, Modal, Progress, Select, Switch, Tabs } from "antd";
 import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -136,7 +136,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const refreshAllModels = async () => {
-        const runnable = config.channels.filter((channel) => channel.baseUrl.trim() && channel.apiKey.trim());
+        const runnable = config.channels.filter((channel) => channel.enabled !== false && channel.baseUrl.trim() && channel.apiKey.trim());
         if (!runnable.length) {
             message.error("请先填写至少一个渠道的 Base URL 和 API Key");
             return;
@@ -244,13 +244,14 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                                 <div className="min-w-0">
                                                     <div className="truncate text-sm font-semibold">{channel.name || "未命名渠道"}</div>
                                                     <div className="mt-1 text-xs text-stone-500">
-                                                        {apiFormatLabel(channel.apiFormat)} · 已保存 {channel.models.length} 个模型
+                                                        {apiFormatLabel(channel.apiFormat)} · {channel.enabled !== false ? "已启用" : "已关闭"} · 已保存 {channel.models.length} 个模型
                                                     </div>
                                                 </div>
                                                 <div className="flex shrink-0 gap-2">
-                                                    <Button size="small" loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
+                                                    <Button size="small" disabled={channel.enabled === false} loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
                                                         拉取模型
                                                     </Button>
+                                                    <Switch size="small" checked={channel.enabled !== false} onChange={(enabled) => updateChannel(channel.id, { enabled })} checkedChildren="开" unCheckedChildren="关" />
                                                     <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />
                                                 </div>
                                             </div>
@@ -463,9 +464,9 @@ function withChannels(config: AiConfig, channels: ModelChannel[]): AiConfig {
         ...config,
         channels,
         models,
-        baseUrl: channels[0]?.baseUrl || config.baseUrl,
-        apiKey: channels[0]?.apiKey || config.apiKey,
-        apiFormat: channels[0]?.apiFormat || config.apiFormat,
+        baseUrl: channels.find((channel) => channel.enabled !== false)?.baseUrl || config.baseUrl,
+        apiKey: channels.find((channel) => channel.enabled !== false)?.apiKey || config.apiKey,
+        apiFormat: channels.find((channel) => channel.enabled !== false)?.apiFormat || config.apiFormat,
         imageModels,
         videoModels,
         textModels,
