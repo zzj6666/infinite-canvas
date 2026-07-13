@@ -387,7 +387,7 @@ function validateGptImage2Size(model: string, size: string) {
     const shortEdge = Math.min(width, height);
     const pixels = width * height;
     if (width % 16 || height % 16) return "gpt-image-2 的宽高必须是 16 的倍数";
-    if (longEdge >= 3840) return "gpt-image-2 的最长边必须小于 3840px";
+    if (longEdge > 3840) return "gpt-image-2 的最长边不能超过 3840px";
     if (longEdge / shortEdge > 3) return "gpt-image-2 的最长边与最短边比例不能超过 3:1";
     if (pixels < 655_360 || pixels > 8_294_400) return "gpt-image-2 的总像素必须在 655,360 至 8,294,400 之间";
     return "";

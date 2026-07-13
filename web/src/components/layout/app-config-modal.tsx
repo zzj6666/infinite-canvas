@@ -284,7 +284,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                             <Form layout="vertical" requiredMark={false}>
                                 <div className="mb-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                                     <div className="text-sm font-semibold">默认模型和可选项</div>
-                                    <div className="mt-1 text-xs leading-5 text-stone-500">可选项决定各处下拉框展示哪些模型；同名模型会以括号里的渠道名区分。</div>
+                                    <div className="mt-1 text-xs leading-5 text-stone-500">可选项决定各处下拉框展示哪些模型。</div>
                                 </div>
                                 <div className="grid gap-4 md:grid-cols-2">
                                     {modelGroups.map((group) => (

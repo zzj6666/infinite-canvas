@@ -24,8 +24,8 @@ const aspectOptions: Array<{ value: string; label: string; width: number; height
     { value: "2:3", label: "2:3", width: 1024, height: 1536, icon: "portrait", sizes: { "1k": "1024x1536", "2k": "1360x2048", "4k": "2352x3520" } },
     { value: "4:3", label: "4:3", width: 1360, height: 1024, icon: "landscape", sizes: { "1k": "1360x1024", "2k": "2048x1536", "4k": "3312x2480" } },
     { value: "3:4", label: "3:4", width: 1024, height: 1360, icon: "portrait", sizes: { "1k": "1024x1360", "2k": "1536x2048", "4k": "2480x3312" } },
-    { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape", sizes: { "1k": "1824x1024", "2k": "2560x1440", "4k": "3824x2144" } },
-    { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait", sizes: { "1k": "1024x1824", "2k": "1440x2560", "4k": "2144x3824" } },
+    { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape", sizes: { "1k": "1824x1024", "2k": "2560x1440", "4k": "3840x2160" } },
+    { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait", sizes: { "1k": "1024x1824", "2k": "1440x2560", "4k": "2160x3840" } },
     { value: "auto", label: "自动", width: 0, height: 0, icon: "auto" },
 ];
 
