@@ -263,7 +263,6 @@ function InfiniteCanvasPage() {
     const [size, setSize] = useState({ width: 1200, height: 720 });
     const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
     const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
-    const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
@@ -630,7 +629,7 @@ function InfiniteCanvasPage() {
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const hasMultipleSelectedNodes = selectedNodeIds.size > 1;
-    const activeNodeId = hasMultipleSelectedNodes ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
+    const activeNodeId = hasMultipleSelectedNodes || selectedNodeIds.size !== 1 ? null : Array.from(selectedNodeIds)[0];
     const batchChildCountById = useMemo(() => {
         const map = new Map<string, number>();
         nodes.forEach((node) => {
@@ -745,7 +744,6 @@ function InfiniteCanvasPage() {
             setConnections((prev) => prev.filter((conn) => !allIds.has(conn.fromNodeId) && !allIds.has(conn.toNodeId)));
             setSelectedNodeIds(new Set());
             setSelectedConnectionId(null);
-            setHoveredNodeId((current) => (current && allIds.has(current) ? null : current));
             setToolbarNodeId((current) => (current && allIds.has(current) ? null : current));
             setDialogNodeId((current) => (current && allIds.has(current) ? null : current));
             setEditingNodeId((current) => (current && allIds.has(current) ? null : current));
@@ -773,10 +771,10 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId(null);
         setContextMenu(null);
         setSelectionBox(null);
-        setHoveredNodeId(null);
         setToolbarNodeId(null);
         setDialogNodeId(null);
         setEditingNodeId(null);
+        setInfoNodeId(null);
     }, [cancelPendingConnectionCreate]);
 
     const clearCanvas = useCallback(() => {
@@ -964,13 +962,6 @@ function InfiniteCanvasPage() {
             if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
             if (event.button !== 0) return;
 
-            if (!event.ctrlKey && !event.metaKey) {
-                setSelectionBox(null);
-                setSelectedNodeIds(new Set());
-                setSelectedConnectionId(null);
-                return;
-            }
-
             const world = screenToCanvas(event.clientX, event.clientY);
             const nextSelectionBox = {
                 startWorldX: world.x,
@@ -984,9 +975,12 @@ function InfiniteCanvasPage() {
             setSelectionBox(nextSelectionBox);
             if (!event.shiftKey) {
                 setSelectedNodeIds(new Set());
+                setToolbarNodeId(null);
+                setDialogNodeId(null);
             }
 
             setSelectedConnectionId(null);
+            setInfoNodeId(null);
         },
         [cancelPendingConnectionCreate, screenToCanvas],
     );
@@ -994,7 +988,6 @@ function InfiniteCanvasPage() {
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
         event.stopPropagation();
         setContextMenu(null);
-        setHoveredNodeId(null);
         setToolbarNodeId(null);
         setSelectedConnectionId(null);
 
@@ -1363,7 +1356,6 @@ function InfiniteCanvasPage() {
                 setContextMenu(null);
                 setSelectionBox(null);
                 setConnecting(null);
-                setHoveredNodeId(null);
                 setToolbarNodeId(null);
                 setDialogNodeId(null);
                 setEditingNodeId(null);
@@ -2530,13 +2522,6 @@ function InfiniteCanvasPage() {
                                 />
                             )}
                             onMouseDown={handleNodeMouseDown}
-                            onHoverStart={(nodeId) => {
-                                if (nodeDraggingRef.current) return;
-                                setHoveredNodeId(nodeId);
-                            }}
-                            onHoverEnd={(nodeId) => {
-                                setHoveredNodeId((current) => (current === nodeId ? null : current));
-                            }}
                             onConnectStart={handleConnectStart}
                             onResize={handleNodeResize}
                             onContentChange={handleNodeContentChange}
@@ -2816,10 +2801,10 @@ function CanvasTopBar({
             </div>
             <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
-                    <Shortcut keys={["拖动画布"]} value="平移视图" />
+                    <Shortcut keys={["鼠标中键", "拖动"]} value="平移视图" />
                     <Shortcut keys={["滚轮"]} value="缩放画布" />
                     <Shortcut keys={["缩放滑杆"]} value="精确调整缩放" />
-                    <Shortcut keys={["Ctrl / Cmd", "拖动"]} value="框选多个节点" />
+                    <Shortcut keys={["鼠标左键", "拖动"]} value="框选多个节点" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
                     <Shortcut keys={["Ctrl / Cmd", "A"]} value="全选节点" />
                     <Shortcut keys={["Ctrl / Cmd", "C / V"]} value="复制 / 粘贴节点，或粘贴剪切板文本/图片" />
