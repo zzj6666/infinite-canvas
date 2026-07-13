@@ -18,6 +18,9 @@ export default defineConfig({
             "@": resolve(webDir, "src"),
         },
     },
+    server: {
+        allowedHosts: ["home.zzjnb.fun"],
+    },
     define: {
         __APP_VERSION__: JSON.stringify(localVersion),
         __APP_RELEASES__: JSON.stringify(parseChangelog(localChangelog)),

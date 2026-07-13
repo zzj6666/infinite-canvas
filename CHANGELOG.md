@@ -2,6 +2,8 @@
 
 ## Unreleased
 
++ [调整] 移除网页端「生图工作台」「视频创作台」入口与路由；提示词库改为仅管理本机个人提示词，不再拉取第三方 GitHub 提示词源。
++ [调整] Agent 与 WebDAV 同步去掉工作台相关能力。
 + [优化] 本地 Agent 连接说明明确区分插件 / 手动 MCP 才会增加 Codex token 消耗，直接运行 Agent 不受影响。
 + [优化] 优化本地 Agent 连接说明，区分 Codex 插件启动和直接运行 Agent 两种方式。
 + [新增] Agent 对话消息改用 streamdown 流式渲染，提升长回复与 Markdown 内容展示效果。

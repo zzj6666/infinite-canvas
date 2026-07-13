@@ -22,16 +22,12 @@ export function PromptCard({
     extraAction?: ReactNode;
 }) {
     return (
-        <Card
-            hoverable
-            className="overflow-hidden"
-            styles={{ body: { padding: 0 } }}
-            cover={
+        <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }}>
+            {item.coverUrl ? (
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     <img src={item.coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" />
                 </button>
-            }
-        >
+            ) : null}
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -40,6 +36,11 @@ export function PromptCard({
                     </div>
                     <p className="mt-2 line-clamp-3 text-xs leading-5 text-stone-600 dark:text-stone-400">{item.prompt}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
+                        {item.category ? (
+                            <Tag className="m-0 text-[11px]" color="blue">
+                                {item.category}
+                            </Tag>
+                        ) : null}
                         {item.tags.map((tag) => (
                             <Tag key={tag} className="m-0 text-[11px]">
                                 {tag}
