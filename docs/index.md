@@ -27,8 +27,6 @@
 ## 支持与安全
 
 - [漏洞提交](/docs/support/security)
-- [打赏支持](/docs/support/donate)
-- [广告赞助](/docs/support/sponsor)
 
 ## 项目进度
 

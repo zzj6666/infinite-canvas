@@ -10,7 +10,7 @@ const tabs = [
   { title: '开发文档', href: '/docs/development/local-development', prefix: '/docs/development' },
   { title: '项目进度', href: '/docs/progress/changelog', prefix: '/docs/progress' },
   { title: '商务合作', href: '/docs/business/business', prefix: '/docs/business' },
-  { title: '赞助支持', href: '/docs/support/donate', prefix: '/docs/support' },
+  { title: '支持与安全', href: '/docs/support/security', prefix: '/docs/support' },
 ];
 
 export function DocsTopTabs() {
