@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 
 export type ApiCallFormat = "openai" | "gemini";
@@ -12,6 +11,7 @@ export type ModelChannel = {
     apiKey: string;
     apiFormat: ApiCallFormat;
     models: string[];
+    hasApiKey?: boolean;
 };
 
 export type AiConfig = {
@@ -97,7 +97,7 @@ export const defaultConfig: AiConfig = {
     quality: "auto",
     size: "1:1",
     count: "1",
-    canvasImageCount: "3",
+    canvasImageCount: "1",
 };
 
 export const defaultWebdavSyncConfig: WebdavSyncConfig = {
@@ -114,6 +114,9 @@ type ConfigStore = {
     isConfigOpen: boolean;
     configTab: ConfigTabKey;
     shouldPromptContinue: boolean;
+    systemConfigLoaded: boolean;
+    loadSystemConfig: () => Promise<void>;
+    saveSystemConfig: () => Promise<void>;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
     updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
@@ -164,79 +167,81 @@ function modelListKey(capability: ModelCapability) {
 
 function isAiConfigReady(config: AiConfig, model: string) {
     const channel = resolveModelChannel(config, model);
-    return Boolean(model.trim() && channel.baseUrl.trim() && channel.apiKey.trim());
+    const hasKey = Boolean(channel.apiKey?.trim() && channel.apiKey !== "********") || Boolean(channel.hasApiKey) || channel.apiKey === "********";
+    // Server-proxied mode: client only needs a selected model + channel baseUrl; key stays on server.
+    return Boolean(model.trim() && channel.baseUrl.trim() && hasKey);
 }
 
-export const useConfigStore = create<ConfigStore>()(
-    persist(
-        (set, get) => ({
-            config: defaultConfig,
-            webdav: defaultWebdavSyncConfig,
-            isConfigOpen: false,
-            configTab: "channels",
-            shouldPromptContinue: false,
-            updateConfig: (key, value) =>
-                set((state) => ({
-                    config: {
-                        ...state.config,
-                        [key]: value,
-                    },
-                })),
-            updateWebdavConfig: (key, value) =>
-                set((state) => ({
-                    webdav: {
-                        ...state.webdav,
-                        [key]: value,
-                    },
-                })),
-            isAiConfigReady: (config, model) => isAiConfigReady(config, model),
-            openConfigDialog: (shouldPromptContinue = false, configTab = "channels") => set({ isConfigOpen: true, shouldPromptContinue, configTab }),
-            setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
-            clearPromptContinue: () => set({ shouldPromptContinue: false }),
-        }),
-        {
-            name: CONFIG_STORE_KEY,
-            partialize: (state) => ({ config: state.config, webdav: state.webdav }),
-            merge: (persisted, current) => {
-                const persistedState = (persisted || {}) as Partial<ConfigStore>;
-                const persistedConfig = (persistedState.config || {}) as Partial<AiConfig>;
-                const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
-                const config = { ...defaultConfig, ...persistedConfig };
-                if (!Array.isArray(persistedConfig.channels)) config.channels = [];
-                const channels = normalizeChannels(config);
-                const models = modelOptionsFromChannels(channels);
-                return {
-                    ...current,
-                    webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav },
-                    config: {
-                        ...config,
-                        channelMode: "local",
-                        apiFormat: normalizeApiFormat(config.apiFormat),
-                        channels,
-                        models,
-                        imageModel: normalizeModelOptionValue(config.imageModel || config.model, channels),
-                        videoModel: normalizeModelOptionValue(config.videoModel || "grok-imagine-video", channels),
-                        textModel: normalizeModelOptionValue(config.textModel || config.model, channels),
-                        audioModel: normalizeModelOptionValue(config.audioModel || defaultConfig.audioModel, channels),
-                        audioVoice: config.audioVoice || defaultConfig.audioVoice,
-                        audioFormat: config.audioFormat || defaultConfig.audioFormat,
-                        audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-                        audioInstructions: config.audioInstructions || "",
-                        videoSeconds: config.videoSeconds || "6",
-                        vquality: config.vquality || "720",
-                        videoGenerateAudio: config.videoGenerateAudio || "true",
-                        videoWatermark: config.videoWatermark || "false",
-                        canvasImageCount: config.canvasImageCount || "3",
-                        imageModels: Array.isArray(persistedConfig.imageModels) ? normalizeModelList(config.imageModels, channels) : filterModelsByCapability(models, "image"),
-                        videoModels: Array.isArray(persistedConfig.videoModels) ? normalizeModelList(config.videoModels, channels) : filterModelsByCapability(models, "video"),
-                        textModels: Array.isArray(persistedConfig.textModels) ? normalizeModelList(config.textModels, channels) : filterModelsByCapability(models, "text"),
-                        audioModels: Array.isArray(persistedConfig.audioModels) ? normalizeModelList(config.audioModels, channels) : filterModelsByCapability(models, "audio"),
-                    },
-                };
+export const useConfigStore = create<ConfigStore>()((set, get) => ({
+    config: defaultConfig,
+    webdav: defaultWebdavSyncConfig,
+    isConfigOpen: false,
+    configTab: "channels",
+    shouldPromptContinue: false,
+    systemConfigLoaded: false,
+    loadSystemConfig: async () => {
+        try {
+            const { fetchSystemAiConfig } = await import("@/services/api/system-config");
+            const result = await fetchSystemAiConfig();
+            const incoming = { ...defaultConfig, ...result.config } as AiConfig;
+            if (!Array.isArray(incoming.channels)) incoming.channels = defaultConfig.channels;
+            const channels = normalizeChannels(incoming);
+            const models = modelOptionsFromChannels(channels);
+            set({
+                systemConfigLoaded: true,
+                config: {
+                    ...incoming,
+                    channelMode: "local",
+                    apiFormat: normalizeApiFormat(incoming.apiFormat),
+                    channels,
+                    models,
+                    imageModel: normalizeModelOptionValue(incoming.imageModel || incoming.model, channels),
+                    videoModel: normalizeModelOptionValue(incoming.videoModel || defaultConfig.videoModel, channels),
+                    textModel: normalizeModelOptionValue(incoming.textModel || incoming.model, channels),
+                    audioModel: normalizeModelOptionValue(incoming.audioModel || defaultConfig.audioModel, channels),
+                    imageModels: Array.isArray(incoming.imageModels) ? normalizeModelList(incoming.imageModels, channels) : filterModelsByCapability(models, "image"),
+                    videoModels: Array.isArray(incoming.videoModels) ? normalizeModelList(incoming.videoModels, channels) : filterModelsByCapability(models, "video"),
+                    textModels: Array.isArray(incoming.textModels) ? normalizeModelList(incoming.textModels, channels) : filterModelsByCapability(models, "text"),
+                    audioModels: Array.isArray(incoming.audioModels) ? normalizeModelList(incoming.audioModels, channels) : filterModelsByCapability(models, "audio"),
+                },
+            });
+        } catch (error) {
+            console.error(error);
+            set({ systemConfigLoaded: true });
+        }
+    },
+    saveSystemConfig: async () => {
+        const { saveSystemAiConfig } = await import("@/services/api/system-config");
+        const result = await saveSystemAiConfig(get().config);
+        const channels = normalizeChannels({ ...defaultConfig, ...result.config } as AiConfig);
+        set({
+            config: {
+                ...get().config,
+                ...result.config,
+                channels,
+                models: modelOptionsFromChannels(channels),
             },
-        },
-    ),
-);
+        });
+    },
+    updateConfig: (key, value) =>
+        set((state) => ({
+            config: {
+                ...state.config,
+                [key]: value,
+            },
+        })),
+    updateWebdavConfig: (key, value) =>
+        set((state) => ({
+            webdav: {
+                ...state.webdav,
+                [key]: value,
+            },
+        })),
+    isAiConfigReady: (config, model) => isAiConfigReady(config, model),
+    openConfigDialog: (shouldPromptContinue = false, configTab = "channels") => set({ isConfigOpen: true, shouldPromptContinue, configTab }),
+    setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
+    clearPromptContinue: () => set({ shouldPromptContinue: false }),
+}));
 
 function normalizeModelList(models: string[], channels: ModelChannel[]) {
     const allModelOptions = channels.flatMap((channel) => channel.models.map((model) => encodeChannelModel(channel.id, model)));

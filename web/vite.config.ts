@@ -20,6 +20,12 @@ export default defineConfig({
     },
     server: {
         allowedHosts: ["home.zzjnb.fun"],
+        proxy: {
+            "/api": {
+                target: process.env.VITE_API_PROXY || "http://127.0.0.1:3010",
+                changeOrigin: true,
+            },
+        },
     },
     define: {
         __APP_VERSION__: JSON.stringify(localVersion),

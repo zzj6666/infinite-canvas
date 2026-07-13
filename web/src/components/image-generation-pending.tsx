@@ -33,11 +33,11 @@ export function ImageGenerationPending({ className, label, compact = false }: { 
             </div>
             <div className="absolute bottom-4 left-4 right-4">
                 <div className="mb-2 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
-                    <span>{formatDuration(tick * 1000)}</span>
-                    <span>{Math.floor(progress)}%</span>
+                    <span className="tabular-nums">{formatDuration(tick * 1000)}</span>
+                    <span className="tabular-nums">{Math.floor(progress)}%</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-stone-300/70 dark:bg-white/12">
-                    <div className="h-full rounded-full bg-stone-900 dark:bg-stone-100" style={{ width: `${progress}%` }} />
+                    <div className="h-full rounded-full bg-stone-900 transition-[width] duration-500 ease-out dark:bg-stone-100" style={{ width: `${progress}%` }} />
                 </div>
             </div>
         </div>

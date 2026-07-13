@@ -1,6 +1,5 @@
-# 构建 Vite 前端产物。
+# 构建前端
 FROM oven/bun:1.3.13 AS web-build
-
 WORKDIR /app/web
 COPY web/package.json web/bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install --cache-dir=/root/.bun/install/cache
@@ -9,10 +8,23 @@ COPY CHANGELOG.md /app/CHANGELOG.md
 COPY web ./
 RUN bun run build
 
-# 运行镜像：只启动静态前端，AI 请求由浏览器前台直连用户自己的接口。
-FROM nginx:1.27-alpine
+# 构建服务端依赖
+FROM oven/bun:1.3.13 AS server-build
+WORKDIR /app/server
+COPY server/package.json server/bun.lock* ./
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install --cache-dir=/root/.bun/install/cache --production
+COPY server ./
 
-COPY --from=web-build /app/web/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
+# 运行：单进程 Hono 服务 API + 静态前端
+FROM oven/bun:1.3.13
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV DATA_DIR=/data
+ENV STATIC_DIR=/app/web/dist
+COPY --from=server-build /app/server /app/server
+COPY --from=web-build /app/web/dist /app/web/dist
+WORKDIR /app/server
 EXPOSE 3000
+VOLUME ["/data"]
+CMD ["bun", "run", "src/index.ts"]

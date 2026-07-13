@@ -1,10 +1,7 @@
 import { create } from "zustand";
-import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
-import { nanoid } from "nanoid";
-import { localForageStorage } from "@/lib/localforage-storage";
-import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
+import { createAsset, deleteAsset, fetchAssets, replaceAssets as replaceAssetsApi, updateAsset as updateAssetApi } from "@/services/api/assets-api";
+import { mediaUrl } from "@/services/api/media-api";
 
 export type AssetKind = "text" | "image" | "video";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
@@ -28,78 +25,78 @@ type AssetBase<T extends AssetKind> = {
 type AssetStore = {
     hydrated: boolean;
     assets: Asset[];
+    loadAssets: () => Promise<void>;
     addAsset: (asset: Omit<Asset, "id" | "createdAt" | "updatedAt">) => string;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
     replaceAssets: (assets: Asset[]) => void;
     cleanupImages: (extra?: unknown) => void;
+    reset: () => void;
 };
 
-const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+function hydrateAssetUrls(asset: Asset): Asset {
+    if (asset.kind === "image" && asset.data.storageKey) {
+        const url = mediaUrl(asset.data.storageKey);
+        return {
+            ...asset,
+            coverUrl: asset.coverUrl?.startsWith("/api/media/") || asset.coverUrl?.startsWith("blob:") || !asset.coverUrl ? url : asset.coverUrl,
+            data: { ...asset.data, dataUrl: url },
+        };
+    }
+    if (asset.kind === "video" && asset.data.storageKey) {
+        const url = mediaUrl(asset.data.storageKey);
+        return { ...asset, data: { ...asset.data, url } };
+    }
+    return asset;
+}
 
-const assetStorage: PersistStorage<AssetStore> = {
-    getItem: async (name) => {
-        const value = await localForageStorage.getItem(name);
-        if (!value) return null;
-        const parsed = JSON.parse(value) as StorageValue<AssetStore>;
-        parsed.state.assets = await Promise.all(
-            parsed.state.assets.map(async (asset) => {
-                if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
-                if (asset.kind !== "image") return asset;
-                if (asset.data.storageKey)
-                    return {
-                        ...asset,
-                        coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(asset.data.storageKey, asset.coverUrl) : asset.coverUrl,
-                        data: { ...asset.data, dataUrl: await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl) },
-                    };
-                if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
-                const image = await uploadImage(asset.data.dataUrl);
-                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
-            }),
-        );
-        return parsed;
+export const useAssetStore = create<AssetStore>((set, get) => ({
+    hydrated: false,
+    assets: [],
+    reset: () => set({ assets: [], hydrated: false }),
+    loadAssets: async () => {
+        try {
+            const result = await fetchAssets();
+            set({ assets: result.assets.map(hydrateAssetUrls), hydrated: true });
+        } catch (error) {
+            console.error(error);
+            set({ assets: [], hydrated: true });
+        }
     },
-    setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
-    removeItem: (name) => localForageStorage.removeItem(name),
-};
-
-export const useAssetStore = create<AssetStore>()(
-    persist(
-        (set, get) => ({
-            hydrated: false,
-            assets: [],
-            addAsset: (asset) => {
-                const now = new Date().toISOString();
-                const id = nanoid();
-                set((state) => ({ assets: [{ ...asset, id, createdAt: now, updatedAt: now } as Asset, ...state.assets] }));
-                return id;
-            },
-            updateAsset: (id, patch) =>
+    addAsset: (asset) => {
+        const tempId = `tmp_${Date.now()}`;
+        const now = new Date().toISOString();
+        const optimistic = hydrateAssetUrls({ ...asset, id: tempId, createdAt: now, updatedAt: now } as Asset);
+        set((state) => ({ assets: [optimistic, ...state.assets] }));
+        void createAsset({ ...asset, title: asset.title })
+            .then(({ asset: created }) => {
                 set((state) => ({
-                    assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, ...patch, updatedAt: new Date().toISOString() } as Asset) : asset)),
-                })),
-            removeAsset: (id) =>
-                set((state) => {
-                    const assets = state.assets.filter((asset) => asset.id !== id);
-                    get().cleanupImages({ assets });
-                    return { assets };
-                }),
-            replaceAssets: (assets) => set({ assets }),
-            cleanupImages: (extra) => {
-                window.setTimeout(async () => {
-                    const { useCanvasStore } = await import("@/stores/canvas/use-canvas-store");
-                    await cleanupUnusedImages({ assets: get().assets, projects: useCanvasStore.getState().projects, extra });
-                    await cleanupUnusedMedia({ assets: get().assets, projects: useCanvasStore.getState().projects, extra });
-                }, 0);
-            },
-        }),
-        {
-            name: ASSET_STORE_KEY,
-            storage: assetStorage,
-            partialize: (state) => ({ assets: state.assets }) as StorageValue<AssetStore>["state"],
-            onRehydrateStorage: () => () => {
-                useAssetStore.setState({ hydrated: true });
-            },
-        },
-    ),
-);
+                    assets: state.assets.map((item) => (item.id === tempId ? hydrateAssetUrls(created) : item)),
+                }));
+            })
+            .catch((error) => {
+                console.error(error);
+                set((state) => ({ assets: state.assets.filter((item) => item.id !== tempId) }));
+            });
+        return tempId;
+    },
+    updateAsset: (id, patch) => {
+        set((state) => ({
+            assets: state.assets.map((asset) => (asset.id === id ? hydrateAssetUrls({ ...asset, ...patch, updatedAt: new Date().toISOString() } as Asset) : asset)),
+        }));
+        void updateAssetApi(id, patch as Partial<Asset>).catch((error) => console.error(error));
+    },
+    removeAsset: (id) => {
+        set((state) => ({ assets: state.assets.filter((asset) => asset.id !== id) }));
+        void deleteAsset(id).catch((error) => console.error(error));
+    },
+    replaceAssets: (assets) => {
+        const next = assets.map(hydrateAssetUrls);
+        set({ assets: next });
+        void replaceAssetsApi(next).catch((error) => console.error(error));
+    },
+    cleanupImages: () => {
+        // server-side GC not implemented in MVP
+        void get;
+    },
+}));

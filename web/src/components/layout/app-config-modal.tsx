@@ -8,6 +8,7 @@ import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent }
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -70,20 +71,25 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
     const setConfigDialogOpen = useConfigStore((state) => state.setConfigDialogOpen);
     const clearPromptContinue = useConfigStore((state) => state.clearPromptContinue);
+    const saveSystemConfig = useConfigStore((state) => state.saveSystemConfig);
     const modelOptions = config.models.map((model) => ({ label: modelOptionLabel(config, model), value: model }));
     const webdavReady = Boolean(webdav.url.trim());
+    const isAdmin = useUserStore((state) => state.user?.role === "admin");
     useEffect(() => setActiveTab(initialTab), [initialTab]);
 
     const saveConfig = (nextConfig: AiConfig) => {
         (Object.keys(nextConfig) as Array<keyof AiConfig>).forEach((key) => updateConfig(key, nextConfig[key]));
     };
 
-    const finishConfig = () => {
-        const ready = config.channels.some((channel) => channel.baseUrl.trim() && channel.apiKey.trim() && channel.models.length);
-        setConfigDialogOpen(false);
-        if (!ready) return;
-        message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
-        clearPromptContinue();
+    const finishConfig = async () => {
+        try {
+            if (isAdmin) await saveSystemConfig();
+            setConfigDialogOpen(false);
+            message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
+            clearPromptContinue();
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存失败");
+        }
     };
 
     const updateChannels = (channels: ModelChannel[]) => {
@@ -113,7 +119,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const refreshChannelModels = async (channel: ModelChannel) => {
-        if (!channel.baseUrl.trim() || !channel.apiKey.trim()) {
+        if (!channel.baseUrl.trim() || !(channel.apiKey.trim() || channel.hasApiKey)) {
             message.error("请先填写该渠道的 Base URL 和 API Key");
             return;
         }
@@ -205,12 +211,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
         }
     };
 
-    return (
-        <>
-            <Tabs
-                activeKey={activeTab}
-                onChange={(key) => setActiveTab(key as ConfigTabKey)}
-                items={[
+    const tabItems = [
                     {
                         key: "channels",
                         label: "渠道",
@@ -221,7 +222,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                         <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
                                             <CircleAlert className="size-3.5 shrink-0" />
                                             <span className="font-semibold">重要：</span>
-                                            <span>新增或拉取模型后，需要到“模型”Tab 选择可选项才会显示。</span>
+                                            <span>管理员在此配置全站 API；普通用户无需填写 Key。保存后全员可用。</span>
                                             <Button type="link" size="small" className="h-auto p-0 text-xs font-semibold text-amber-900 dark:text-amber-100" onClick={() => setActiveTab("models")}>
                                                 去模型设置
                                             </Button>
@@ -398,12 +399,29 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                             </Form>
                         ),
                     },
-                ]}
+                ];
+
+    return (
+        <>
+            <Tabs
+                activeKey={activeTab}
+                onChange={(key) => setActiveTab(key as ConfigTabKey)}
+                items={tabItems.filter((item) => {
+                    if (item.key === "webdav") return false;
+                    if (!isAdmin && (item.key === "channels" || item.key === "models")) return false;
+                    return true;
+                })}
             />
             {showDoneButton ? (
                 <div className="mt-4 flex justify-end">
-                    <Button type="primary" onClick={finishConfig}>
+                    <Button type="primary" onClick={() => void finishConfig()}>
                         完成
+                    </Button>
+                </div>
+            ) : isAdmin ? (
+                <div className="mt-4 flex justify-end">
+                    <Button type="primary" onClick={() => void finishConfig()}>
+                        保存到服务器
                     </Button>
                 </div>
             ) : null}

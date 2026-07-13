@@ -296,6 +296,28 @@
         box-shadow: none !important;
     }
 
+    .canvas-config-mode.ant-segmented {
+        flex-shrink: 0;
+    }
+
+    .canvas-config-mode.ant-segmented .ant-segmented-item-label {
+        min-height: 26px;
+        padding-inline: 8px;
+    }
+
+    .canvas-compact-control.ant-btn {
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .canvas-compact-control.ant-btn > span:not(.ant-btn-icon) {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .canvas-compact-control.canvas-control-select.ant-select {
         height: 100%;
     }

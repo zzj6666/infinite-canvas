@@ -1,9 +1,13 @@
 import { create } from "zustand";
-import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
-import { nanoid } from "nanoid";
-import { localForageStorage } from "@/lib/localforage-storage";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
+import {
+    createCanvasProject,
+    deleteCanvasProjects,
+    fetchCanvasProjects,
+    importCanvasProject,
+    updateCanvasProject,
+} from "@/services/api/canvas-api";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 
 export type CanvasProject = {
@@ -23,112 +27,78 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
-    createProject: (title?: string) => string;
-    importProject: (project: Partial<CanvasProject>) => string;
+    loadProjects: () => Promise<void>;
+    createProject: (title?: string) => Promise<string>;
+    importProject: (project: Partial<CanvasProject>) => Promise<string>;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "title">>) => void;
+    reset: () => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
-const CANVAS_STORE_KEY = "infinite-canvas:canvas_store";
-type PersistedCanvasState = Pick<CanvasStore, "projects">;
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let queuedPersistState: PersistedCanvasState | null = null;
+const updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-const canvasStorage: PersistStorage<CanvasStore> = {
-    getItem: async (name) => {
-        const value = await localForageStorage.getItem(name);
-        if (!value) return null;
-        const parsed = JSON.parse(value) as StorageValue<CanvasStore>;
-        queuedPersistState = parsed.state as PersistedCanvasState;
-        return parsed;
-    },
-    setItem: (name, value) => {
-        const nextState = value.state as PersistedCanvasState;
-        if (queuedPersistState && queuedPersistState.projects === nextState.projects) return;
-        queuedPersistState = nextState;
-        if (saveTimer) clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-            saveTimer = null;
-            void localForageStorage.setItem(name, JSON.stringify(value));
-        }, 400);
-    },
-    removeItem: (name) => localForageStorage.removeItem(name),
-};
+function scheduleProjectSave(id: string, getProject: () => CanvasProject | undefined) {
+    const prev = updateTimers.get(id);
+    if (prev) clearTimeout(prev);
+    updateTimers.set(
+        id,
+        setTimeout(() => {
+            updateTimers.delete(id);
+            const project = getProject();
+            if (!project) return;
+            void updateCanvasProject(id, project).catch((error) => console.error("save canvas failed", error));
+        }, 400),
+    );
+}
 
-export const useCanvasStore = create<CanvasStore>()(
-    persist(
-        (set, get) => ({
-            hydrated: false,
-            projects: [],
-            createProject: (title = "未命名画布") => {
-                const now = new Date().toISOString();
-                const id = nanoid();
-                const project: CanvasProject = {
-                    id,
-                    title,
-                    createdAt: now,
-                    updatedAt: now,
-                    nodes: [],
-                    connections: [],
-                    chatSessions: [],
-                    activeChatId: null,
-                    backgroundMode: "lines",
-                    showImageInfo: false,
-                    viewport: initialViewport,
-                };
-                set((state) => ({ projects: [project, ...state.projects] }));
-                return id;
-            },
-            importProject: (source) => {
-                const now = new Date().toISOString();
-                const project: CanvasProject = {
-                    id: nanoid(),
-                    title: source.title || "导入画布",
-                    createdAt: source.createdAt || now,
-                    updatedAt: now,
-                    nodes: source.nodes || [],
-                    connections: source.connections || [],
-                    chatSessions: source.chatSessions || [],
-                    activeChatId: source.activeChatId || null,
-                    backgroundMode: source.backgroundMode || "lines",
-                    showImageInfo: source.showImageInfo || false,
-                    viewport: source.viewport || initialViewport,
-                };
-                set((state) => ({ projects: [project, ...state.projects] }));
-                return project.id;
-            },
-            openProject: (id) => {
-                return get().projects.find((item) => item.id === id) || null;
-            },
-            renameProject: (id, title) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, title: title.trim() || project.title, updatedAt: new Date().toISOString() } : project)),
-                })),
-            deleteProjects: (ids) =>
-                set((state) => {
-                    const projects = state.projects.filter((project) => !ids.includes(project.id));
-                    return { projects };
-                }),
-            replaceProjects: (projects) => set({ projects }),
-            updateProject: (id, patch) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),
-                })),
-        }),
-        {
-            name: CANVAS_STORE_KEY,
-            storage: canvasStorage,
-            partialize: (state) =>
-                ({
-                    projects: state.projects,
-                }) as StorageValue<CanvasStore>["state"],
-            onRehydrateStorage: () => () => {
-                useCanvasStore.setState({ hydrated: true });
-            },
-        },
-    ),
-);
+export const useCanvasStore = create<CanvasStore>((set, get) => ({
+    hydrated: false,
+    projects: [],
+    reset: () => {
+        updateTimers.forEach((timer) => clearTimeout(timer));
+        updateTimers.clear();
+        set({ projects: [], hydrated: false });
+    },
+    loadProjects: async () => {
+        try {
+            const result = await fetchCanvasProjects();
+            set({ projects: result.projects, hydrated: true });
+        } catch (error) {
+            console.error(error);
+            set({ projects: [], hydrated: true });
+        }
+    },
+    createProject: async (title = "未命名画布") => {
+        const { project } = await createCanvasProject(title);
+        set((state) => ({ projects: [project, ...state.projects.filter((item) => item.id !== project.id)] }));
+        return project.id;
+    },
+    importProject: async (source) => {
+        const { project } = await importCanvasProject(source);
+        set((state) => ({ projects: [project, ...state.projects.filter((item) => item.id !== project.id)] }));
+        return project.id;
+    },
+    openProject: (id) => get().projects.find((item) => item.id === id) || null,
+    renameProject: (id, title) => {
+        const nextTitle = title.trim();
+        set((state) => ({
+            projects: state.projects.map((project) => (project.id === id ? { ...project, title: nextTitle || project.title, updatedAt: new Date().toISOString() } : project)),
+        }));
+        scheduleProjectSave(id, () => get().projects.find((item) => item.id === id));
+    },
+    deleteProjects: (ids) => {
+        set((state) => ({ projects: state.projects.filter((project) => !ids.includes(project.id)) }));
+        void deleteCanvasProjects(ids).catch((error) => console.error(error));
+    },
+    replaceProjects: (projects) => set({ projects }),
+    updateProject: (id, patch) => {
+        set((state) => ({
+            projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),
+        }));
+        scheduleProjectSave(id, () => get().projects.find((item) => item.id === id));
+    },
+}));

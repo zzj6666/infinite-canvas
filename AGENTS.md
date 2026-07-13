@@ -23,8 +23,9 @@
 
 - 前端使用 Vite、React、React Router、TypeScript、Ant Design、Tailwind、Zustand。
 - 编写 Ant Design 相关代码时，参考 https://ant.design/llms-full.txt 理解组件 API、示例和设计规范，并优先结合项目当前 antd 版本与既有写法。
-- 外部服务请求统一放在 `web/src/services/api/`，由浏览器前端直连，不假设存在项目后端。
-- 全局或跨页面状态优先放在 `web/src/stores/`。
+- 多用户自托管：业务数据与 AI 代理走 `server/`（`/api/*`），浏览器不要直连模型供应商，也不要把 API Key 存前端。
+- 外部请求：同源 API 放在 `web/src/services/api/`；服务端实现放在 `server/src/`。
+- 全局或跨页面状态优先放在 `web/src/stores/`；画布/素材/提示词的持久化由服务端完成，store 只做缓存与防抖写入。
 - 已经放在全局 store 或全局 hook 中的状态/动作，组件需要时直接使用对应 store/hook，不要为了“纯组件”层层透传 props；避免一个组件传递过多参数。
 - 全局组件、全局常量、全局配置等全局性质的内容不要作为 props 或参数层层传递；哪里需要就在哪里直接从对应全局入口获取。
 - 多个页面重复出现的 UI 副作用动作，例如复制文本并提示、下载并提示、统一确认弹窗，优先抽成 `web/src/hooks/` 下的全局 hook；不要放进 store，除非它确实是需要共享/订阅的状态。

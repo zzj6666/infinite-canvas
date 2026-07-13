@@ -30,7 +30,9 @@ export default function CanvasPage() {
     const enterProject = (id: string) => {
         navigate(`/canvas/${id}`);
     };
-    const createAndEnter = () => enterProject(createProject(`无限画布 ${projects.length + 1}`));
+    const createAndEnter = () => {
+        void createProject(`无限画布 ${projects.length + 1}`).then((id) => enterProject(id));
+    };
     const importCanvas = async (file?: File) => {
         if (!file) return;
         try {
@@ -48,7 +50,7 @@ export default function CanvasPage() {
                     }),
                 ),
             );
-            data.projects.forEach((item) => importProject(item.project));
+            await Promise.all(data.projects.map((item) => importProject(item.project)));
             message.success(`已导入 ${data.projects.length} 个画布`);
         } catch {
             message.error("导入失败，请选择有效的画布压缩包");
@@ -60,7 +62,14 @@ export default function CanvasPage() {
     useEffect(() => {
         if (!hydrated || autoOpenRef.current || (mode !== "new" && mode !== "recent")) return;
         autoOpenRef.current = true;
-        enterProject(mode === "new" ? createProject(`无限画布 ${projects.length + 1}`) : projects[0]?.id || createProject(`无限画布 ${projects.length + 1}`));
+        void (async () => {
+            if (mode === "recent" && projects[0]?.id) {
+                enterProject(projects[0].id);
+                return;
+            }
+            const id = await createProject(`无限画布 ${projects.length + 1}`);
+            enterProject(id);
+        })();
     }, [createProject, hydrated, mode, projects]);
 
     if (hydrated && (mode === "new" || mode === "recent")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;

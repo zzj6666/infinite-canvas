@@ -33,82 +33,61 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     const canGenerate = hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput);
 
     return (
-        <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="shrink-0 text-sm font-semibold">生成配置</div>
-                <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex h-full w-full cursor-move flex-col gap-3 overflow-hidden px-3.5 pb-3.5 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+            <div className="flex h-8 items-center justify-between gap-3">
+                <div className="shrink-0 text-sm font-semibold tracking-wide">生成配置</div>
+                <div className="shrink-0 cursor-default" onMouseDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
-                        className="canvas-config-mode !rounded-md !p-0.5"
+                        className="canvas-config-mode !rounded-lg !p-0.5"
                         value={mode}
                         onChange={(value) => onConfigChange(node.id, { generationMode: value as CanvasGenerationMode })}
                         options={[
-                            {
-                                value: "image",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <ImageIcon className="size-3.5" />
-                                        生图
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "text",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <MessageSquare className="size-3.5" />
-                                        文本
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "video",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <Video className="size-3.5" />
-                                        视频
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: "audio",
-                                label: (
-                                    <span className="inline-flex items-center gap-1">
-                                        <Music2 className="size-3.5" />
-                                        音频
-                                    </span>
-                                ),
-                            },
+                            { value: "image", label: <span className="inline-flex items-center gap-1 px-0.5"><ImageIcon className="size-3.5" />生图</span> },
+                            { value: "text", label: <span className="inline-flex items-center gap-1 px-0.5"><MessageSquare className="size-3.5" />文本</span> },
+                            { value: "video", label: <span className="inline-flex items-center gap-1 px-0.5"><Video className="size-3.5" />视频</span> },
+                            { value: "audio", label: <span className="inline-flex items-center gap-1 px-0.5"><Music2 className="size-3.5" />音频</span> },
                         ]}
                     />
                 </div>
             </div>
 
-            <div className="mb-2 flex flex-wrap gap-1.5">
-                <InputChip label="提示词" value={`${inputSummary.textCount} 个`} style={chipStyle} />
-                <InputChip label="参考图" value={`${inputSummary.imageCount} 张`} style={chipStyle} />
-                <InputChip label="参考视频" value={`${inputSummary.videoCount} 个`} style={chipStyle} />
-                <InputChip label="参考音频" value={`${inputSummary.audioCount} 个`} style={chipStyle} />
-                <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
+            <div className="flex h-8 items-center gap-2 overflow-hidden">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                    <InputChip label="提示词" value={`${inputSummary.textCount}`} style={chipStyle} />
+                    <InputChip label="图" value={`${inputSummary.imageCount}`} style={chipStyle} />
+                    <InputChip label="视频" value={`${inputSummary.videoCount}`} style={chipStyle} />
+                    <InputChip label="音频" value={`${inputSummary.audioCount}`} style={chipStyle} />
+                </div>
+                <button
+                    type="button"
+                    className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition hover:opacity-90"
+                    style={chipStyle}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={onComposerToggle}
+                >
                     <Settings2 className="size-3.5" />
                     组装提示词
                 </button>
             </div>
 
-            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
-                <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => openConfigDialog(true)} fullWidth />
+            <div
+                className={`grid h-9 min-w-0 cursor-default items-center gap-2 ${mode === "text" ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_9.5rem]"}`}
+                onMouseDown={(event) => event.stopPropagation()}
+            >
+                <ModelPicker className="canvas-compact-control h-9 min-w-0" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => openConfigDialog(true)} fullWidth />
                 {mode === "video" ? (
-                    <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                    <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-9 !w-full !justify-start !rounded-lg !px-2.5" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                 ) : mode === "image" ? (
-                    <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
+                    <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-9 !w-full !justify-start !rounded-lg !px-2.5" onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
                 ) : mode === "audio" ? (
-                    <CanvasAudioSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                    <CanvasAudioSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-9 !w-full !justify-start !rounded-lg !px-2.5" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                 ) : null}
             </div>
 
             <Button
                 type="primary"
-                className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
+                className="mt-auto !h-10 !w-full !cursor-pointer !rounded-xl"
                 danger={isRunning}
                 disabled={!isRunning && !canGenerate}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -118,8 +97,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                     {isRunning ? (
                         <>
                             <LoaderCircle className="size-4 animate-spin" />
-                            <Square className="size-3.5 fill-current" />
-                            <span>停止</span>
+                            <span>停止生成</span>
                         </>
                     ) : (
                         <>
@@ -135,9 +113,9 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
     return (
-        <div className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px]" style={style}>
-            <span>{label}</span>
-            <span className="font-medium">{value}</span>
+        <div className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] leading-none" style={style}>
+            <span className="opacity-70">{label}</span>
+            <span className="font-semibold tabular-nums">{value}</span>
         </div>
     );
 }
