@@ -7,7 +7,6 @@ import { requireAuth } from "../middleware";
 
 type PromptRow = {
     id: string;
-    user_id: string;
     title: string;
     prompt: string;
     tags_json: string;
@@ -36,13 +35,11 @@ export const promptRoutes = new Hono<{ Variables: AppVariables }>();
 promptRoutes.use("*", requireAuth);
 
 promptRoutes.get("/", (c) => {
-    const user = c.get("user");
-    const rows = getDb().query("SELECT * FROM prompts WHERE user_id = ? ORDER BY updated_at DESC").all(user.id) as PromptRow[];
+    const rows = getDb().query("SELECT * FROM prompts ORDER BY updated_at DESC").all() as PromptRow[];
     return c.json({ prompts: rows.map(rowToPrompt) });
 });
 
 promptRoutes.post("/", async (c) => {
-    const user = c.get("user");
     const body = await c.req.json().catch(() => ({}));
     const title = String(body.title || "").trim();
     const prompt = String(body.prompt || "").trim();
@@ -56,19 +53,18 @@ promptRoutes.post("/", async (c) => {
     const coverUrl = String(body.coverUrl || "");
     getDb()
         .query(
-            `INSERT INTO prompts (id, user_id, title, prompt, tags_json, category, note, cover_url, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO prompts (id, title, prompt, tags_json, category, note, cover_url, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, user.id, title, prompt, JSON.stringify(tags), category, note, coverUrl, now, now);
+        .run(id, title, prompt, JSON.stringify(tags), category, note, coverUrl, now, now);
     return c.json({
         prompt: { id, title, prompt, tags, category, note, coverUrl, createdAt: now, updatedAt: now },
     }, 201);
 });
 
 promptRoutes.put("/:id", async (c) => {
-    const user = c.get("user");
     const id = c.req.param("id");
-    const existing = getDb().query("SELECT * FROM prompts WHERE id = ? AND user_id = ?").get(id, user.id) as PromptRow | null;
+    const existing = getDb().query("SELECT * FROM prompts WHERE id = ?").get(id) as PromptRow | null;
     if (!existing) return c.json({ error: "提示词不存在" }, 404);
     const body = await c.req.json().catch(() => ({}));
     const current = rowToPrompt(existing);
@@ -85,15 +81,14 @@ promptRoutes.put("/:id", async (c) => {
     getDb()
         .query(
             `UPDATE prompts SET title = ?, prompt = ?, tags_json = ?, category = ?, note = ?, cover_url = ?, updated_at = ?
-             WHERE id = ? AND user_id = ?`,
+              WHERE id = ?`,
         )
-        .run(next.title, next.prompt, JSON.stringify(next.tags), next.category, next.note, next.coverUrl, next.updatedAt, id, user.id);
+        .run(next.title, next.prompt, JSON.stringify(next.tags), next.category, next.note, next.coverUrl, next.updatedAt, id);
     return c.json({ prompt: next });
 });
 
 promptRoutes.delete("/:id", (c) => {
-    const user = c.get("user");
-    const result = getDb().query("DELETE FROM prompts WHERE id = ? AND user_id = ?").run(c.req.param("id"), user.id);
+    const result = getDb().query("DELETE FROM prompts WHERE id = ?").run(c.req.param("id"));
     if (!result.changes) return c.json({ error: "提示词不存在" }, 404);
     return c.json({ ok: true });
 });

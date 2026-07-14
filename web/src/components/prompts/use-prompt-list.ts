@@ -38,7 +38,6 @@ export function usePromptList({ keyword, tags, category }: { keyword: string; ta
         items,
         tags: availableTags,
         categories,
-        total: items.length,
     };
 }
 

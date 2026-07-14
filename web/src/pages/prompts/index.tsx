@@ -1,6 +1,6 @@
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { BookOpenText, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { App, Button, Empty, Form, Input, Modal, Select, Space, Tag } from "antd";
+import { App, Button, Empty, Form, Input, Modal, Select, Space, Tag, Tooltip } from "antd";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
@@ -33,7 +33,7 @@ export default function PromptsPage() {
     const updatePrompt = usePromptStore((state) => state.updatePrompt);
     const removePrompt = usePromptStore((state) => state.removePrompt);
     const allPrompts = usePromptStore((state) => state.prompts);
-    const { items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({
+    const { items: promptItems, tags: promptTags, categories: promptCategoryOptions } = usePromptList({
         keyword: titleKeyword,
         tags: selectedTags,
         category: selectedCategory,
@@ -48,6 +48,12 @@ export default function PromptsPage() {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
         setSelectedTags((items) => (items.includes(tag) ? items.filter((item) => item !== tag) : [...items, tag]));
     };
+    const clearFilters = () => {
+        setTitleKeyword("");
+        setSelectedTags([]);
+        setSelectedCategory(ALL_PROMPTS_OPTION);
+    };
+    const hasFilters = Boolean(titleKeyword || selectedTags.length || selectedCategory !== ALL_PROMPTS_OPTION);
 
     const openCreate = () => {
         setEditingId(null);
@@ -111,71 +117,90 @@ export default function PromptsPage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background text-stone-800 dark:text-stone-100">
-            <main className="app-page min-h-0 flex-1 overflow-y-auto px-6 py-8">
-                <div className="pb-8">
-                    <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 text-center">
-                        <div>
-                            <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的提示词</h1>
-                            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">仅保存在本机浏览器，共 {totalPrompts} 条。可按标题、标签与分类查找，并在画布中直接选用。</p>
+            <main className="app-page min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
+                    <header className="flex flex-col gap-6 border-b border-stone-300/70 pb-8 dark:border-stone-700/80 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="max-w-2xl">
+                            <div className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-stone-500 dark:text-stone-400">
+                                <BookOpenText className="size-4" />
+                                团队提示词库
+                            </div>
+                            <h1 className="text-4xl font-semibold tracking-[-0.045em] text-stone-950 sm:text-5xl dark:text-stone-100">共享提示词</h1>
+                            <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">沉淀可复用的创作表达，让团队在画布中快速调用同一套灵感。</p>
                         </div>
-                        <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>
+                        <Button type="primary" size="large" icon={<Plus className="size-4" />} onClick={openCreate}>
                             新建提示词
                         </Button>
-                    </div>
-                    <div className="mx-auto mt-8 w-full max-w-2xl">
-                        <Input size="large" className="w-full" prefix={<Search className="size-4 text-stone-400" />} value={titleKeyword} placeholder="搜索标题、内容、标签" onChange={(event) => setTitleKeyword(event.target.value)} />
-                    </div>
-                    <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
-                            <div className="flex flex-wrap gap-2">
-                                {promptCategoryOptions.map((category) => (
-                                    <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
-                                        {category}
-                                    </Tag.CheckableTag>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">标签</div>
-                            <div className="flex flex-wrap gap-2">
-                                {promptTags.map((tag) => (
-                                    <Tag.CheckableTag
-                                        key={tag}
-                                        checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
-                                        className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
-                                        onChange={() => toggleTag(tag)}
-                                    >
-                                        {tag}
-                                    </Tag.CheckableTag>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    </header>
 
-                <div>
-                    <div className="mx-auto grid max-w-7xl gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                        {promptItems.map((item) => (
-                            <PromptCard
-                                key={item.id}
-                                item={item}
-                                onOpen={() => setSelectedPrompt(item)}
-                                onCopy={() => copyText(item.prompt, "提示词已复制")}
-                                extraAction={
-                                    <Space size={4}>
-                                        <Button size="small" icon={<Pencil className="size-3.5" />} onClick={() => openEdit(item)}>
-                                            编辑
-                                        </Button>
-                                        <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => handleDelete(item)}>
-                                            删除
-                                        </Button>
-                                    </Space>
-                                }
-                            />
-                        ))}
-                    </div>
-                    {promptItems.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={allPrompts.length === 0 ? "还没有提示词，点击上方新建" : "没有找到匹配的提示词"} className="py-16" /> : null}
+                    <section className="app-surface mt-7 rounded-2xl p-4 sm:p-5">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                            <div className="w-full lg:max-w-md">
+                                <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">检索提示词</div>
+                                <Input size="large" className="w-full" prefix={<Search className="size-4 text-stone-400" />} value={titleKeyword} placeholder="搜索标题、内容或标签" allowClear onChange={(event) => setTitleKeyword(event.target.value)} />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <span className="w-8 pt-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">分类</span>
+                                    <div className="flex flex-1 flex-wrap gap-2">
+                                        {promptCategoryOptions.map((category) => (
+                                            <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
+                                                {category}
+                                            </Tag.CheckableTag>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="w-8 pt-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">标签</span>
+                                    <div className="flex flex-1 flex-wrap gap-2">
+                                        {promptTags.map((tag) => (
+                                            <Tag.CheckableTag
+                                                key={tag}
+                                                checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
+                                                className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
+                                                onChange={() => toggleTag(tag)}
+                                            >
+                                                {tag}
+                                            </Tag.CheckableTag>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            {hasFilters ? (
+                                <Button type="text" className="self-start text-stone-500" onClick={clearFilters}>
+                                    清除筛选
+                                </Button>
+                            ) : null}
+                        </div>
+                    </section>
+
+                    <section className="mt-9">
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                            <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">{hasFilters ? "筛选结果" : "全部提示词"}</h2>
+                            <span className="text-xs text-stone-500 dark:text-stone-400">{promptItems.length} 条</span>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                            {promptItems.map((item) => (
+                                <PromptCard
+                                    key={item.id}
+                                    item={item}
+                                    onOpen={() => setSelectedPrompt(item)}
+                                    onCopy={() => copyText(item.prompt, "提示词已复制")}
+                                    extraAction={
+                                        <Space size={2}>
+                                            <Tooltip title="编辑">
+                                                <Button size="small" type="text" icon={<Pencil className="size-3.5" />} aria-label="编辑" onClick={() => openEdit(item)} />
+                                            </Tooltip>
+                                            <Tooltip title="删除">
+                                                <Button size="small" type="text" danger icon={<Trash2 className="size-3.5" />} aria-label="删除" onClick={() => handleDelete(item)} />
+                                            </Tooltip>
+                                        </Space>
+                                    }
+                                />
+                            ))}
+                        </div>
+                        {promptItems.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={allPrompts.length === 0 ? "还没有提示词，点击上方新建" : "没有找到匹配的提示词"} className="py-20" /> : null}
+                    </section>
                 </div>
             </main>
 

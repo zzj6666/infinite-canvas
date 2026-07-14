@@ -95,7 +95,6 @@ export function initDb() {
 
         CREATE TABLE IF NOT EXISTS prompts (
             id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             title TEXT NOT NULL,
             prompt TEXT NOT NULL,
             tags_json TEXT NOT NULL,
@@ -105,7 +104,6 @@ export function initDb() {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_prompts_user ON prompts(user_id);
 
         CREATE TABLE IF NOT EXISTS media_files (
             id TEXT PRIMARY KEY,
@@ -120,9 +118,35 @@ export function initDb() {
         CREATE INDEX IF NOT EXISTS idx_media_user_key ON media_files(user_id, storage_key);
     `);
 
+    migratePromptsToShared();
+    db.exec("CREATE INDEX IF NOT EXISTS idx_prompts_updated ON prompts(updated_at DESC);");
     ensureAdmin();
     ensureSystemConfig();
     return db;
+}
+
+function migratePromptsToShared() {
+    const columns = db.query("PRAGMA table_info(prompts)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "user_id")) return;
+    db.exec(`
+        BEGIN;
+        ALTER TABLE prompts RENAME TO prompts_legacy;
+        CREATE TABLE prompts (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            tags_json TEXT NOT NULL,
+            category TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            cover_url TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        INSERT INTO prompts (id, title, prompt, tags_json, category, note, cover_url, created_at, updated_at)
+        SELECT id, title, prompt, tags_json, category, note, cover_url, created_at, updated_at FROM prompts_legacy;
+        DROP TABLE prompts_legacy;
+        COMMIT;
+    `);
 }
 
 function ensureAdmin() {

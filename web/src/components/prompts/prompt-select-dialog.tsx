@@ -11,7 +11,7 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
     const [keyword, setKeyword] = useState("");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState(ALL_PROMPTS_OPTION);
-    const { items, tags: promptTags, categories: promptCategories, total } = usePromptList({ keyword, tags: selectedTags, category: selectedCategory });
+    const { items, tags: promptTags, categories: promptCategories } = usePromptList({ keyword, tags: selectedTags, category: selectedCategory });
 
     const toggleTag = (tag: string) => {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
@@ -24,12 +24,11 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
     };
 
     return (
-        <Modal title="我的提示词" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
+        <Modal title="共享提示词" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="mx-auto max-w-2xl">
                     <Input size="large" prefix={<Search className="size-4 text-stone-400" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索标题、内容、标签" />
                 </div>
-                <div className="mt-3 text-center text-xs text-stone-500 dark:text-stone-400">共 {total} 条本地提示词</div>
                 <div className="mt-5 grid gap-3">
                     <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                         <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
@@ -61,7 +60,7 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
                             <PromptCard key={item.id} item={item} onOpen={() => selectPrompt(item.prompt)} onCopy={() => selectPrompt(item.prompt)} actionLabel="使用此提示词" actionIcon={<Check className="size-3.5" />} actionType="primary" />
                         ))}
                     </div>
-                    {items.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有本地提示词，请先到提示词库添加" className="py-8" /> : null}
+                    {items.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有共享提示词，请先到提示词库添加" className="py-8" /> : null}
                 </div>
             </div>
         </Modal>
