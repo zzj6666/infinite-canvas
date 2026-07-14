@@ -119,49 +119,52 @@ export default function AdminUsersPage() {
     };
 
     return (
-        <main className="h-full overflow-y-auto bg-background">
-            <div className="mx-auto max-w-5xl px-6 py-6">
-                <div className="mb-5 flex items-center justify-between gap-3">
+        <main className="app-page h-full overflow-y-auto">
+            <div className="app-page-shell max-w-5xl">
+                <div className="app-page-header flex items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-semibold">用户管理</h1>
-                        <p className="mt-1 text-sm text-stone-500">仅管理员可创建账号。普通用户登录后使用统一 API 配置。</p>
+                        <p className="text-xs font-medium tracking-wide text-stone-500 dark:text-stone-400">管理员</p>
+                        <h1 className="mt-2 text-3xl font-semibold tracking-tight">用户管理</h1>
+                        <p className="mt-2 text-sm text-stone-500">仅管理员可创建账号。普通用户登录后使用统一 API 配置。</p>
                     </div>
                     <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setOpen(true)}>
                         新建用户
                     </Button>
                 </div>
 
-                <Table
-                    rowKey="id"
-                    loading={loading}
-                    dataSource={users}
-                    pagination={false}
-                    columns={[
-                        { title: "用户名", dataIndex: "username" },
-                        { title: "显示名", dataIndex: "displayName" },
-                        {
-                            title: "角色",
-                            dataIndex: "role",
-                            render: (role: AuthUser["role"]) => <Tag color={role === "admin" ? "blue" : "default"}>{role === "admin" ? "管理员" : "用户"}</Tag>,
-                        },
-                        {
-                            title: "状态",
-                            dataIndex: "disabled",
-                            render: (disabled: boolean, record) => <Switch checked={!disabled} checkedChildren="启用" unCheckedChildren="禁用" onChange={(checked) => void toggleDisabled(record, !checked)} />,
-                        },
-                        {
-                            title: "操作",
-                            render: (_, record) => (
-                                <Space>
-                                    <Button size="small" onClick={() => resetPassword(record)}>
-                                        重置密码
-                                    </Button>
-                                    <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={record.id === currentUser?.id} onClick={() => removeUser(record)} />
-                                </Space>
-                            ),
-                        },
-                    ]}
-                />
+                <div className="app-surface overflow-hidden rounded-2xl p-1.5 sm:p-2">
+                    <Table
+                        rowKey="id"
+                        loading={loading}
+                        dataSource={users}
+                        pagination={false}
+                        columns={[
+                            { title: "用户名", dataIndex: "username" },
+                            { title: "显示名", dataIndex: "displayName" },
+                            {
+                                title: "角色",
+                                dataIndex: "role",
+                                render: (role: AuthUser["role"]) => <Tag color={role === "admin" ? "blue" : "default"}>{role === "admin" ? "管理员" : "用户"}</Tag>,
+                            },
+                            {
+                                title: "状态",
+                                dataIndex: "disabled",
+                                render: (disabled: boolean, record) => <Switch checked={!disabled} checkedChildren="启用" unCheckedChildren="禁用" onChange={(checked) => void toggleDisabled(record, !checked)} />,
+                            },
+                            {
+                                title: "操作",
+                                render: (_, record) => (
+                                    <Space>
+                                        <Button size="small" onClick={() => resetPassword(record)}>
+                                            重置密码
+                                        </Button>
+                                        <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={record.id === currentUser?.id} onClick={() => removeUser(record)} />
+                                    </Space>
+                                ),
+                            },
+                        ]}
+                    />
+                </div>
             </div>
 
             <Modal title="新建用户" open={open} onCancel={() => setOpen(false)} onOk={() => void handleCreate()} okText="创建">

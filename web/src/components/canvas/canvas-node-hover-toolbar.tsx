@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { App, Modal, Segmented, Tooltip } from "antd";
 import { Download, Ellipsis, FolderPlus, Image as ImageIcon, Info, MessageSquare, Minus, Music2, Pencil, Plus, RefreshCw, Settings2, Trash2, Upload, Video } from "lucide-react";
 
@@ -73,8 +73,9 @@ export function CanvasNodeHoverToolbar({
     onToggleFreeResize,
     onDelete,
 }: CanvasNodeHoverToolbarProps) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [quickImageToolIds, setQuickImageToolIds] = useState<ImageQuickToolId[]>(defaultImageQuickToolIds);
-    const [showImageToolLabels, setShowImageToolLabels] = useState(true);
+    const [showImageToolLabels, setShowImageToolLabels] = useState(false);
     const [draftImageToolIds, setDraftImageToolIds] = useState<ImageQuickToolId[]>(defaultImageQuickToolIds);
     const [draftShowImageToolLabels, setDraftShowImageToolLabels] = useState(true);
     const [imageToolSettingsOpen, setImageToolSettingsOpen] = useState(false);
@@ -178,8 +179,8 @@ export function CanvasNodeHoverToolbar({
     return (
         <>
             <div
-                className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center rounded-[18px] border border-black/10 bg-white px-1 text-[15px] text-[#242529] shadow-[0_8px_28px_rgba(15,23,42,.12)]"
-                style={{ left, top }}
+                className="absolute z-[70] flex h-10 -translate-x-1/2 -translate-y-full items-center rounded-[14px] border px-1 text-sm shadow-[0_8px_28px_rgba(15,23,42,.18)]"
+                style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
                 onMouseEnter={() => onKeep(node.id)}
                 onMouseLeave={() => {
                     if (!imageToolSettingsOpen) onLeave();
@@ -188,9 +189,9 @@ export function CanvasNodeHoverToolbar({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {toolbarTools.map((tool) => (
-                    <ToolbarAction key={tool.id} {...tool} showLabel={showImageToolLabels} />
+                    <ToolbarAction key={tool.id} {...tool} theme={theme} showLabel={showImageToolLabels} />
                 ))}
-                {hasImage ? <ToolbarAction id="more" title="配置快捷工具" label="更多" icon={<Ellipsis className="size-4" />} active={imageToolSettingsOpen} onClick={openImageToolSettings} showLabel={showImageToolLabels} /> : null}
+                {hasImage ? <ToolbarAction id="more" title="配置快捷工具" label="更多" icon={<Ellipsis className="size-4" />} active={imageToolSettingsOpen} onClick={openImageToolSettings} theme={theme} showLabel={showImageToolLabels} /> : null}
             </div>
             {hasImage ? (
                 <ImageToolSettingsModal
@@ -213,6 +214,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const [view, setView] = useState<"info" | "json">("info");
     const imageBytes = node?.type === CanvasNodeType.Image && node.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = node?.type === CanvasNodeType.Image ? node.metadata?.batchChildIds?.length || 0 : 0;
+    const mediaDimensions = node?.metadata?.naturalWidth && node.metadata?.naturalHeight ? `${node.metadata.naturalWidth} x ${node.metadata.naturalHeight}` : "";
     const json = useMemo(() => {
         if (!node) return "";
         return JSON.stringify(
@@ -255,7 +257,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             <InfoRow label="ID" value={node.id} />
                             <InfoRow label="名称" value={node.title || "未命名节点"} />
                             <InfoRow label="类型" value={node.type === CanvasNodeType.Text ? "文本" : node.type === CanvasNodeType.Image ? "图片" : node.type === CanvasNodeType.Video ? "视频" : node.type === CanvasNodeType.Audio ? "音频" : node.type === CanvasNodeType.Group ? "组" : "生成配置"} />
-                            <InfoRow label="尺寸" value={`${Math.round(node.width)} x ${Math.round(node.height)}`} />
+                            <InfoRow label={mediaDimensions ? "像素尺寸" : "节点尺寸"} value={mediaDimensions || `${Math.round(node.width)} x ${Math.round(node.height)}`} />
                             <InfoRow label="位置" value={`${Math.round(node.position.x)}, ${Math.round(node.position.y)}`} />
                             <InfoRow label="状态" value={node.metadata?.status || "idle"} />
                             {batchCount > 1 ? <InfoRow label="图片组" value={`${batchCount} 张`} /> : null}
@@ -278,12 +280,12 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     );
 }
 
-function ToolbarAction({ title, label, icon, onClick, showLabel, active = false, danger = false }: ToolbarTool & { showLabel: boolean }) {
+function ToolbarAction({ title, label, icon, onClick, showLabel, active = false, danger = false, theme }: ToolbarTool & { showLabel: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const hasText = showLabel && Boolean(label);
     return (
-        <Tooltip title={title} placement="top" mouseEnterDelay={0.2} color="#ffffff" styles={{ root: { color: "#242529", boxShadow: "0 8px 24px rgba(15,23,42,.16)", fontSize: 13, fontWeight: 500 } }}>
-            <button type="button" className={`group relative flex h-12 items-center whitespace-nowrap px-1.5 ${danger ? "text-[#ef4444]" : ""}`} onClick={onClick} aria-label={title}>
-                <span className={`flex h-9 items-center ${hasText ? "gap-2 px-2.5" : "justify-center px-2"} rounded-lg transition group-hover:bg-[#f0f0f1] ${active ? "bg-[#eeeeef]" : ""}`}>
+        <Tooltip title={title} placement="top" mouseEnterDelay={0.2} color={theme.toolbar.panel} styles={{ root: { color: theme.node.text, boxShadow: "0 8px 24px rgba(15,23,42,.22)", fontSize: 13, fontWeight: 500 } }}>
+            <button type="button" className="group relative flex h-10 items-center whitespace-nowrap px-0.5" style={{ color: danger ? "#f87171" : active ? theme.toolbar.activeText : theme.toolbar.item }} onClick={onClick} aria-label={title}>
+                <span className={`flex h-8 items-center ${hasText ? "gap-2 px-2.5" : "justify-center px-2"} rounded-lg transition ${active ? "" : "group-hover:bg-[var(--toolbar-hover)]"}`} style={{ background: active ? theme.toolbar.activeBg : undefined, "--toolbar-hover": theme.toolbar.itemHover } as CSSProperties}>
                     {icon}
                     {hasText ? <span>{label}</span> : null}
                 </span>

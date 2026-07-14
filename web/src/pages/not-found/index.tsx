@@ -4,9 +4,9 @@ import { Link } from "react-router-dom";
 export default function NotFound() {
     return (
         <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-            <main className="flex h-full min-h-0 items-center justify-center overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-10 text-stone-900 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.16)_1px,transparent_1px)] dark:text-stone-100">
-                <section className="w-full max-w-md text-center">
-                    <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-lg border border-stone-200 bg-white text-2xl font-semibold shadow-sm dark:border-stone-800 dark:bg-stone-900">404</div>
+            <main className="app-page flex h-full min-h-0 items-center justify-center overflow-y-auto px-6 py-10 text-stone-900 dark:text-stone-100">
+                <section className="app-surface w-full max-w-md rounded-3xl p-10 text-center">
+                    <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-stone-950 text-2xl font-semibold text-stone-50 shadow-lg dark:bg-stone-50 dark:text-stone-950">404</div>
                     <h1 className="text-3xl font-semibold tracking-normal">页面不存在</h1>
                     <p className="mt-3 text-sm leading-6 text-stone-500 dark:text-stone-400">这个地址没有对应的页面，可能已经移动或被合并到其他入口。</p>
                     <div className="mt-8 flex flex-wrap justify-center gap-3">

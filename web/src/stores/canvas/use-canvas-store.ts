@@ -5,7 +5,6 @@ import {
     createCanvasProject,
     deleteCanvasProjects,
     fetchCanvasProjects,
-    importCanvasProject,
     updateCanvasProject,
 } from "@/services/api/canvas-api";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
@@ -29,11 +28,9 @@ type CanvasStore = {
     projects: CanvasProject[];
     loadProjects: () => Promise<void>;
     createProject: (title?: string) => Promise<string>;
-    importProject: (project: Partial<CanvasProject>) => Promise<string>;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
-    replaceProjects: (projects: CanvasProject[]) => void;
     updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "title">>) => void;
     reset: () => void;
 };
@@ -77,11 +74,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         set((state) => ({ projects: [project, ...state.projects.filter((item) => item.id !== project.id)] }));
         return project.id;
     },
-    importProject: async (source) => {
-        const { project } = await importCanvasProject(source);
-        set((state) => ({ projects: [project, ...state.projects.filter((item) => item.id !== project.id)] }));
-        return project.id;
-    },
     openProject: (id) => get().projects.find((item) => item.id === id) || null,
     renameProject: (id, title) => {
         const nextTitle = title.trim();
@@ -94,7 +86,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         set((state) => ({ projects: state.projects.filter((project) => !ids.includes(project.id)) }));
         void deleteCanvasProjects(ids).catch((error) => console.error(error));
     },
-    replaceProjects: (projects) => set({ projects }),
     updateProject: (id, patch) => {
         set((state) => ({
             projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),

@@ -1,13 +1,21 @@
 ---
 title: 本地开发
-description: 前端优先的本地开发方式
+description: 前端与服务端的本地开发方式
 ---
 
 # 本地开发
 
-当前主应用以 `web/` 前端为主，AI 请求由浏览器前台直连用户自己的 OpenAI 兼容接口。
+当前主应用由 `web/` 前端和 `server/` API 服务组成，画布、素材和媒体按用户保存到服务端。
 
-## 1. 启动前端
+## 1. 启动服务端
+
+```bash
+cd server
+bun install
+bun run dev
+```
+
+## 2. 启动前端
 
 ```bash
 cd web
@@ -21,11 +29,11 @@ bun run dev
 http://localhost:3000
 ```
 
-## 2. 配置模型
+## 3. 配置模型
 
-打开右上角配置弹窗，填写自己的 `Base URL`、`API Key` 和模型名。第三方提示词和 WebDAV 都由浏览器前端直连。
+管理员打开右上角配置弹窗，填写 `Base URL`、`API Key` 和模型名；配置保存在服务端并由 API 代理调用。
 
-## 3. 启动文档站
+## 4. 启动文档站
 
 如果需要单独调整文档站，在 `docs` 目录执行：
 

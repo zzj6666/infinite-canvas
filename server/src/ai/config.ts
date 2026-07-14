@@ -1,6 +1,6 @@
 import { getSystemAiConfig } from "../routes/system-config";
 
-export type ApiCallFormat = "openai" | "gemini";
+export type ApiCallFormat = "openai" | "gemini" | "ark";
 
 export type ModelChannel = {
     id: string;

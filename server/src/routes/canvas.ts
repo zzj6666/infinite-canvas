@@ -131,31 +131,3 @@ canvasRoutes.post("/projects/delete", async (c) => {
         .run(user.id, ...ids);
     return c.json({ ok: true });
 });
-
-canvasRoutes.post("/projects/import", async (c) => {
-    const user = c.get("user");
-    const body = await c.req.json().catch(() => ({}));
-    const source = body.project || body;
-    const id = nanoid();
-    const now = new Date().toISOString();
-    const project = {
-        id,
-        title: String(source.title || "导入画布").trim() || "导入画布",
-        createdAt: now,
-        updatedAt: now,
-        nodes: source.nodes || [],
-        connections: source.connections || [],
-        chatSessions: source.chatSessions || [],
-        activeChatId: source.activeChatId ?? null,
-        backgroundMode: source.backgroundMode || "lines",
-        showImageInfo: Boolean(source.showImageInfo),
-        viewport: source.viewport || initialViewport,
-    };
-    getDb()
-        .query(
-            `INSERT INTO canvas_projects (id, user_id, title, data_json, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(id, user.id, project.title, projectDataJson(project), now, now);
-    return c.json({ project }, 201);
-});

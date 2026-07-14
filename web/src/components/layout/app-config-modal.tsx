@@ -1,11 +1,9 @@
-import { App, Button, Form, Input, Modal, Progress, Select, Switch, Tabs } from "antd";
-import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
+import { App, Button, Form, Input, Modal, Select, Switch, Tabs } from "antd";
+import { ChevronDown, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { fetchChannelModels } from "@/services/api/image";
-import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
-import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -18,14 +16,6 @@ type ModelGroup = {
     optionsLabel: string;
 };
 
-type WebdavDomainProgress = {
-    label: string;
-    stage: string;
-    current?: number;
-    total?: number;
-    status?: "active" | "success" | "exception";
-};
-
 const modelGroups: ModelGroup[] = [
     { capability: "image", modelKey: "imageModel", modelsKey: "imageModels", defaultLabel: "默认生图模型", optionsLabel: "生图模型可选项" },
     { capability: "video", modelKey: "videoModel", modelsKey: "videoModels", defaultLabel: "默认视频模型", optionsLabel: "视频模型可选项" },
@@ -36,44 +26,21 @@ const modelGroups: ModelGroup[] = [
 const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [
     { label: "OpenAI", value: "openai" },
     { label: "Gemini", value: "gemini" },
+    { label: "火山方舟", value: "ark" },
 ];
-
-const webdavDomainKeys: AppSyncDomainKey[] = ["canvas", "assets"];
-const webdavDomainLabels: Record<AppSyncDomainKey, string> = {
-    canvas: "画布",
-    assets: "我的素材",
-    "image-workbench": "生图工作台",
-    "video-workbench": "视频创作台",
-};
-
-function createWebdavDomainProgress(): Record<AppSyncDomainKey, WebdavDomainProgress> {
-    return webdavDomainKeys.reduce(
-        (progress, key) => ({
-            ...progress,
-            [key]: { label: webdavDomainLabels[key], stage: "等待同步" },
-        }),
-        {} as Record<AppSyncDomainKey, WebdavDomainProgress>,
-    );
-}
 
 export function AppConfigPanel({ showDoneButton = false, initialTab = "channels" }: { showDoneButton?: boolean; initialTab?: ConfigTabKey }) {
     const { message } = App.useApp();
     const [activeTab, setActiveTab] = useState<ConfigTabKey>(initialTab);
     const [loadingChannelId, setLoadingChannelId] = useState("");
-    const [testingWebdav, setTestingWebdav] = useState(false);
-    const [syncingWebdav, setSyncingWebdav] = useState(false);
-    const [webdavSyncStatus, setWebdavSyncStatus] = useState("");
-    const [webdavDomainProgress, setWebdavDomainProgress] = useState(createWebdavDomainProgress);
+    const [openChannelIds, setOpenChannelIds] = useState<Set<string>>(new Set());
     const config = useConfigStore((state) => state.config);
-    const webdav = useConfigStore((state) => state.webdav);
     const updateConfig = useConfigStore((state) => state.updateConfig);
-    const updateWebdavConfig = useConfigStore((state) => state.updateWebdavConfig);
     const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
     const setConfigDialogOpen = useConfigStore((state) => state.setConfigDialogOpen);
     const clearPromptContinue = useConfigStore((state) => state.clearPromptContinue);
     const saveSystemConfig = useConfigStore((state) => state.saveSystemConfig);
     const modelOptions = config.models.map((model) => ({ label: modelOptionLabel(config, model), value: model }));
-    const webdavReady = Boolean(webdav.url.trim());
     const isAdmin = useUserStore((state) => state.user?.role === "admin");
     useEffect(() => setActiveTab(initialTab), [initialTab]);
 
@@ -107,7 +74,18 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const addChannel = () => {
-        updateChannels([...config.channels, createModelChannel({ name: `渠道 ${config.channels.length + 1}` })]);
+        const channel = createModelChannel({ name: `渠道 ${config.channels.length + 1}` });
+        updateChannels([...config.channels, channel]);
+        setOpenChannelIds((current) => new Set([...current, channel.id]));
+    };
+
+    const toggleChannel = (id: string) => {
+        setOpenChannelIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
     };
 
     const deleteChannel = (id: string) => {
@@ -116,9 +94,18 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
             return;
         }
         updateChannels(config.channels.filter((channel) => channel.id !== id));
+        setOpenChannelIds((current) => {
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+        });
     };
 
     const refreshChannelModels = async (channel: ModelChannel) => {
+        if (channel.apiFormat === "ark") {
+            message.info("火山方舟模型请手动填写官方模型 ID");
+            return;
+        }
         if (!channel.baseUrl.trim() || !(channel.apiKey.trim() || channel.hasApiKey)) {
             message.error("请先填写该渠道的 Base URL 和 API Key");
             return;
@@ -136,9 +123,9 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const refreshAllModels = async () => {
-        const runnable = config.channels.filter((channel) => channel.enabled !== false && channel.baseUrl.trim() && channel.apiKey.trim());
+        const runnable = config.channels.filter((channel) => channel.enabled !== false && channel.apiFormat !== "ark" && channel.baseUrl.trim() && channel.apiKey.trim());
         if (!runnable.length) {
-            message.error("请先填写至少一个渠道的 Base URL 和 API Key");
+            message.error("请先填写至少一个可拉取模型渠道的 Base URL 和 API Key");
             return;
         }
         setLoadingChannelId("all");
@@ -160,74 +147,13 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
         if (!next.includes(config[group.modelKey])) updateConfig(group.modelKey, next[0] || "");
     };
 
-    const testWebdav = async () => {
-        if (!webdavReady) {
-            message.error("请先填写 WebDAV 地址");
-            return;
-        }
-        setTestingWebdav(true);
-        try {
-            await testWebdavConnection(webdav);
-            message.success("WebDAV 连接可用");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "WebDAV 连接测试失败");
-        } finally {
-            setTestingWebdav(false);
-        }
-    };
-
-    const updateWebdavProgress = (event: AppSyncProgressEvent) => {
-        setWebdavSyncStatus(event.stage);
-        if (!event.domain) return;
-        setWebdavDomainProgress((current) => ({
-            ...current,
-            [event.domain as AppSyncDomainKey]: {
-                label: event.label || webdavDomainLabels[event.domain as AppSyncDomainKey],
-                stage: event.stage,
-                current: event.current,
-                total: event.total,
-                status: event.status,
-            },
-        }));
-    };
-
-    const syncWebdav = async () => {
-        if (!webdavReady) {
-            message.error("请先填写 WebDAV 地址");
-            return;
-        }
-        setSyncingWebdav(true);
-        setWebdavDomainProgress(createWebdavDomainProgress());
-        setWebdavSyncStatus("准备同步");
-        try {
-            const result = await syncAppDataToWebdav(webdav, updateWebdavProgress);
-            updateWebdavConfig("lastSyncedAt", result.syncedAt);
-            message.success(`同步完成：${result.projects} 个画布，${result.assets} 个素材，${result.imageLogs + result.videoLogs} 条记录，本次上传 ${result.uploadedFiles} 个文件 ${formatBytes(result.uploadedBytes)}`);
-        } catch (error) {
-            setWebdavSyncStatus(error instanceof Error ? error.message : "WebDAV 同步失败");
-            message.error(error instanceof Error ? error.message : "WebDAV 同步失败");
-        } finally {
-            setSyncingWebdav(false);
-        }
-    };
-
     const tabItems = [
                     {
                         key: "channels",
                         label: "渠道",
                         children: (
                             <Form layout="vertical" requiredMark={false}>
-                                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
-                                            <CircleAlert className="size-3.5 shrink-0" />
-                                            <span className="font-semibold">重要：</span>
-                                            <span>管理员在此配置全站 API；普通用户无需填写 Key。保存后全员可用。</span>
-                                            <Button type="link" size="small" className="h-auto p-0 text-xs font-semibold text-amber-900 dark:text-amber-100" onClick={() => setActiveTab("models")}>
-                                                去模型设置
-                                            </Button>
-                                        </div>
-                                    </div>
+                                <div className="mb-4 flex justify-end gap-2">
                                     <div className="flex shrink-0 gap-2">
                                         <Button icon={<RefreshCw className="size-4" />} loading={Boolean(loadingChannelId)} onClick={() => void refreshAllModels()}>
                                             拉取全部
@@ -236,44 +162,53 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                             新增渠道
                                         </Button>
                                     </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {config.channels.map((channel) => (
-                                        <section key={channel.id} className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                            <div className="mb-3 flex items-center justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <div className="truncate text-sm font-semibold">{channel.name || "未命名渠道"}</div>
-                                                    <div className="mt-1 text-xs text-stone-500">
-                                                        {apiFormatLabel(channel.apiFormat)} · {channel.enabled !== false ? "已启用" : "已关闭"} · 已保存 {channel.models.length} 个模型
+                                    </div>
+                                    <div className="space-y-3">
+                                        {config.channels.map((channel) => {
+                                            const expanded = openChannelIds.has(channel.id);
+                                            return (
+                                                <section key={channel.id} className="rounded-xl border border-stone-200 bg-stone-50/70 p-4 shadow-[0_8px_24px_rgba(41,37,36,.035)] dark:border-stone-800 dark:bg-stone-900/45">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => toggleChannel(channel.id)}>
+                                                            <ChevronDown className={`size-4 shrink-0 text-stone-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                                                            <span className="min-w-0">
+                                                                <span className="block truncate text-sm font-semibold">{channel.name || "未命名渠道"}</span>
+                                                                <span className="mt-1 block text-xs text-stone-500">{apiFormatLabel(channel.apiFormat)} · 已保存 {channel.models.length} 个模型</span>
+                                                            </span>
+                                                        </button>
+                                                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                                                            <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-stone-200 bg-background px-2 text-xs font-medium text-stone-600 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-300">
+                                                                <span>{channel.enabled !== false ? "已启用" : "已关闭"}</span>
+                                                                <Switch size="small" checked={channel.enabled !== false} onChange={(enabled) => updateChannel(channel.id, { enabled })} />
+                                                            </span>
+                                                            <Button size="small" type="text" className="!h-7 !rounded-lg !px-2" icon={<RefreshCw className="size-3.5" />} disabled={channel.enabled === false || channel.apiFormat === "ark"} loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
+                                                                拉取模型
+                                                            </Button>
+                                                            <Button size="small" type="text" danger className="!h-7 !w-7 !rounded-lg !p-0" icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex shrink-0 gap-2">
-                                                    <Button size="small" disabled={channel.enabled === false} loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
-                                                        拉取模型
-                                                    </Button>
-                                                    <Switch size="small" checked={channel.enabled !== false} onChange={(enabled) => updateChannel(channel.id, { enabled })} checkedChildren="开" unCheckedChildren="关" />
-                                                    <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />
-                                                </div>
-                                            </div>
-                                            <div className="grid gap-4 md:grid-cols-2">
-                                                <Form.Item label="渠道名称" className="mb-0">
-                                                    <Input value={channel.name} onChange={(event) => updateChannel(channel.id, { name: event.target.value })} />
-                                                </Form.Item>
-                                                <Form.Item label="调用格式" className="mb-0">
-                                                    <Select value={channel.apiFormat} options={apiFormatOptions} onChange={(value: ApiCallFormat) => updateChannelApiFormat(channel, value)} />
-                                                </Form.Item>
-                                                <Form.Item label="Base URL" className="mb-0">
-                                                    <Input value={channel.baseUrl} onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} />
-                                                </Form.Item>
-                                                <Form.Item label="API Key" className="mb-0">
-                                                    <Input.Password value={channel.apiKey} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} />
-                                                </Form.Item>
-                                                <Form.Item label="模型列表" className="mb-0 md:col-span-2">
-                                                    <Select mode="tags" showSearch allowClear maxTagCount="responsive" placeholder="输入模型名，或点击拉取模型" value={channel.models} onChange={(models) => updateChannel(channel.id, { models })} />
-                                                </Form.Item>
-                                            </div>
-                                        </section>
-                                    ))}
+                                                    {expanded ? (
+                                                        <div className="mt-4 grid animate-in fade-in slide-in-from-top-1 gap-4 border-t border-stone-200 pt-4 duration-200 dark:border-stone-800 md:grid-cols-2">
+                                                            <Form.Item label="渠道名称" className="mb-0">
+                                                                <Input value={channel.name} onChange={(event) => updateChannel(channel.id, { name: event.target.value })} />
+                                                            </Form.Item>
+                                                            <Form.Item label="调用格式" className="mb-0">
+                                                                <Select value={channel.apiFormat} options={apiFormatOptions} onChange={(value: ApiCallFormat) => updateChannelApiFormat(channel, value)} />
+                                                            </Form.Item>
+                                                            <Form.Item label="Base URL" className="mb-0">
+                                                                <Input value={channel.baseUrl} onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} />
+                                                            </Form.Item>
+                                                            <Form.Item label="API Key" className="mb-0">
+                                                                <Input.Password value={channel.apiKey} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} />
+                                                            </Form.Item>
+                                                            <Form.Item label="模型列表" className="mb-0 md:col-span-2">
+                                                                <Select mode="tags" showSearch allowClear maxTagCount="responsive" placeholder={channel.apiFormat === "ark" ? "手动输入火山方舟模型 ID" : "输入模型名，或点击拉取模型"} value={channel.models} onChange={(models) => updateChannel(channel.id, { models })} />
+                                                            </Form.Item>
+                                                        </div>
+                                                    ) : null}
+                                                </section>
+                                            );
+                                        })}
                                 </div>
                             </Form>
                         ),
@@ -356,50 +291,6 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                             </Form>
                         ),
                     },
-                    {
-                        key: "webdav",
-                        label: "WebDAV",
-                        children: (
-                            <Form layout="vertical" requiredMark={false}>
-                                <section className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                                        <div>
-                                            <div className="flex items-center gap-2 text-sm font-semibold">
-                                                <Cloud className="size-4" />
-                                                WebDAV 同步
-                                            </div>
-                                            <div className="mt-1 text-xs text-stone-500">同步画布、我的素材、生成记录和本地媒体文件，不包含 AI API Key；浏览器会直接连接 WebDAV 服务。</div>
-                                        </div>
-                                        <div className="text-xs text-stone-500">{webdav.lastSyncedAt ? `上次同步 ${formatWebdavTime(webdav.lastSyncedAt)}` : "尚未同步"}</div>
-                                    </div>
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <Form.Item label="WebDAV 地址" className="mb-4">
-                                            <Input value={webdav.url} placeholder="https://nas.example.com/webdav" onChange={(event) => updateWebdavConfig("url", event.target.value)} />
-                                        </Form.Item>
-                                        <Form.Item label="远程目录" extra={`会在该目录下分业务目录保存，每个目录包含 ${WEBDAV_MANIFEST_FILE_NAME} 和 files/`} className="mb-4">
-                                            <Input value={webdav.directory} placeholder="infinite-canvas" onChange={(event) => updateWebdavConfig("directory", event.target.value)} />
-                                        </Form.Item>
-                                        <Form.Item label="用户名" className="mb-0">
-                                            <Input value={webdav.username} autoComplete="username" onChange={(event) => updateWebdavConfig("username", event.target.value)} />
-                                        </Form.Item>
-                                        <Form.Item label="密码 / 应用密码" className="mb-0">
-                                            <Input.Password value={webdav.password} autoComplete="current-password" onChange={(event) => updateWebdavConfig("password", event.target.value)} />
-                                        </Form.Item>
-                                    </div>
-                                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                                        <Button icon={<Wifi className="size-4" />} disabled={!webdavReady || syncingWebdav} loading={testingWebdav} onClick={() => void testWebdav()}>
-                                            测试连接
-                                        </Button>
-                                        <Button type="primary" icon={<RefreshCw className="size-4" />} disabled={!webdavReady || testingWebdav} loading={syncingWebdav} onClick={() => void syncWebdav()}>
-                                            {syncingWebdav ? "同步中" : "立即同步"}
-                                        </Button>
-                                        {webdavSyncStatus ? <span className="text-xs text-stone-500">{webdavSyncStatus}</span> : null}
-                                    </div>
-                                    {syncingWebdav || webdavSyncStatus ? <WebdavProgressGrid progress={webdavDomainProgress} /> : null}
-                                </section>
-                            </Form>
-                        ),
-                    },
                 ];
 
     return (
@@ -407,11 +298,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
             <Tabs
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as ConfigTabKey)}
-                items={tabItems.filter((item) => {
-                    if (item.key === "webdav") return false;
-                    if (!isAdmin && (item.key === "channels" || item.key === "models")) return false;
-                    return true;
-                })}
+                items={tabItems.filter((item) => isAdmin || (item.key !== "channels" && item.key !== "models"))}
             />
             {showDoneButton ? (
                 <div className="mt-4 flex justify-end">
@@ -439,7 +326,7 @@ export function AppConfigModal() {
             title={
                 <div>
                     <div className="text-lg font-semibold">配置与用户偏好</div>
-                    <div className="mt-1 text-xs font-normal text-stone-500">渠道聚合、模型选择和同步偏好</div>
+                    <div className="mt-1 text-xs font-normal text-stone-500">渠道聚合、模型选择和生成偏好</div>
                 </div>
             }
             open={isConfigOpen}
@@ -498,58 +385,7 @@ function uniqueModels(models: string[]) {
 }
 
 function apiFormatLabel(apiFormat: ApiCallFormat) {
-    return apiFormat === "gemini" ? "Gemini" : "OpenAI";
-}
-
-function formatWebdavTime(value: string) {
-    return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-function WebdavProgressGrid({ progress }: { progress: Record<AppSyncDomainKey, WebdavDomainProgress> }) {
-    return (
-        <div className="mt-3 grid gap-2">
-            {webdavDomainKeys.map((key) => {
-                const item = progress[key];
-                const count = item.total ? `${item.current || 0}/${item.total}` : "";
-                return (
-                    <div key={key} className="rounded-md border border-stone-200 px-3 py-2 dark:border-stone-800">
-                        <div className="mb-1 flex min-w-0 items-center justify-between gap-3 text-xs">
-                            <span className="shrink-0 font-medium text-stone-700 dark:text-stone-200">{item.label}</span>
-                            <span className="min-w-0 truncate text-right text-stone-500">
-                                {item.stage}
-                                {count ? ` · ${count}` : ""}
-                            </span>
-                        </div>
-                        <Progress percent={getWebdavProgressPercent(item)} size="small" status={getWebdavProgressStatus(item)} showInfo={false} />
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-function getWebdavProgressPercent(item: WebdavDomainProgress) {
-    if (item.status === "success") return 100;
-    if (item.total) return Math.min(100, Math.round(((item.current || 0) / item.total) * 100));
-    if (item.status === "exception") return 100;
-    if (item.stage === "等待同步") return 0;
-    if (item.stage === "读取远端清单") return 12;
-    if (item.stage === "读取本地数据") return 24;
-    if (item.stage === "下载缺失媒体") return 36;
-    if (item.stage === "写入本地合并结果") return 58;
-    if (item.stage === "上传新增媒体") return 66;
-    if (item.stage === "媒体已齐全" || item.stage === "媒体无需上传") return 74;
-    if (item.stage.startsWith("上传清单")) return 90;
-    return item.status === "active" ? 30 : 0;
-}
-
-function getWebdavProgressStatus(item: WebdavDomainProgress): "normal" | "active" | "success" | "exception" {
-    if (item.status === "success" || item.status === "exception") return item.status;
-    return item.status === "active" ? "active" : "normal";
-}
-
-function formatBytes(bytes: number) {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+    if (apiFormat === "gemini") return "Gemini";
+    if (apiFormat === "ark") return "火山方舟";
+    return "OpenAI";
 }

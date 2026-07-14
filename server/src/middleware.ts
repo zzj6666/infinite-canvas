@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 
 import { getUserBySessionToken } from "./auth";
-import { toPublicUser, type UserRow } from "./db";
+import type { UserRow } from "./db";
 import { SESSION_COOKIE } from "./env";
 
 export type AppVariables = {
@@ -21,8 +21,4 @@ export async function requireAdmin(c: Context<{ Variables: AppVariables }>, next
     const user = c.get("user");
     if (!user || user.role !== "admin") return c.json({ error: "需要管理员权限" }, 403);
     await next();
-}
-
-export function publicUserFromContext(c: Context<{ Variables: AppVariables }>) {
-    return toPublicUser(c.get("user"));
 }

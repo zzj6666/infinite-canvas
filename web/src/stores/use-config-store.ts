@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
-export type ApiCallFormat = "openai" | "gemini";
+export type ApiCallFormat = "openai" | "gemini" | "ark";
 
 export type ModelChannel = {
     id: string;
@@ -46,20 +46,13 @@ export type AiConfig = {
     canvasImageCount: string;
 };
 
-export type WebdavSyncConfig = {
-    url: string;
-    username: string;
-    password: string;
-    directory: string;
-    lastSyncedAt: string;
-};
-export type ConfigTabKey = "channels" | "models" | "preferences" | "webdav";
+export type ConfigTabKey = "channels" | "models" | "preferences";
 
-export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+const ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
@@ -101,17 +94,8 @@ export const defaultConfig: AiConfig = {
     canvasImageCount: "1",
 };
 
-export const defaultWebdavSyncConfig: WebdavSyncConfig = {
-    url: "",
-    username: "",
-    password: "",
-    directory: "infinite-canvas",
-    lastSyncedAt: "",
-};
-
 type ConfigStore = {
     config: AiConfig;
-    webdav: WebdavSyncConfig;
     isConfigOpen: boolean;
     configTab: ConfigTabKey;
     shouldPromptContinue: boolean;
@@ -119,7 +103,6 @@ type ConfigStore = {
     loadSystemConfig: () => Promise<void>;
     saveSystemConfig: () => Promise<void>;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
-    updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean, tab?: ConfigTabKey) => void;
     setConfigDialogOpen: (isOpen: boolean) => void;
@@ -175,7 +158,6 @@ function isAiConfigReady(config: AiConfig, model: string) {
 
 export const useConfigStore = create<ConfigStore>()((set, get) => ({
     config: defaultConfig,
-    webdav: defaultWebdavSyncConfig,
     isConfigOpen: false,
     configTab: "channels",
     shouldPromptContinue: false,
@@ -228,13 +210,6 @@ export const useConfigStore = create<ConfigStore>()((set, get) => ({
         set((state) => ({
             config: {
                 ...state.config,
-                [key]: value,
-            },
-        })),
-    updateWebdavConfig: (key, value) =>
-        set((state) => ({
-            webdav: {
-                ...state.webdav,
                 [key]: value,
             },
         })),
@@ -360,11 +335,14 @@ function normalizeChannels(config: AiConfig) {
 }
 
 export function defaultBaseUrlForApiFormat(apiFormat: ApiCallFormat) {
-    return apiFormat === "gemini" ? GEMINI_BASE_URL : OPENAI_BASE_URL;
+    if (apiFormat === "gemini") return GEMINI_BASE_URL;
+    if (apiFormat === "ark") return ARK_BASE_URL;
+    return OPENAI_BASE_URL;
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-    return apiFormat === "gemini" ? "gemini" : "openai";
+    if (apiFormat === "gemini" || apiFormat === "ark") return apiFormat;
+    return "openai";
 }
 
 function uniqueRawModels(models: string[]) {

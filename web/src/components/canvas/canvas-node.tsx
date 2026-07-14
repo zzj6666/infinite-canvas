@@ -4,6 +4,7 @@ import { ChevronRight, Group, Image as ImageIcon, Music2, RefreshCw, Star, Video
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
+import { loadThumbnail } from "@/services/thumbnail-cache";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
@@ -642,13 +643,7 @@ function ImageContent({
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
             <div className="h-full w-full overflow-hidden rounded-3xl">
-                <img
-                    src={node.metadata!.content!}
-                    alt={node.title}
-                    draggable={false}
-                    onDragStart={(event) => event.preventDefault()}
-                    className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
-                />
+                <CanvasImage key={node.metadata!.thumbnailStorageKey || node.metadata!.thumbnailUrl || node.metadata!.content} thumbnailUrl={node.metadata!.thumbnailUrl} thumbnailStorageKey={node.metadata!.thumbnailStorageKey} src={node.metadata!.content!} alt={node.title} freeResize={node.metadata?.freeResize} />
             </div>
             {isBatchRoot ? (
                 <button
@@ -685,6 +680,33 @@ function ImageContent({
             ) : null}
         </BatchFrame>
     );
+}
+
+function CanvasImage({ thumbnailUrl, thumbnailStorageKey, src, alt, freeResize }: { thumbnailUrl?: string; thumbnailStorageKey?: string; src: string; alt: string; freeResize?: boolean }) {
+    const [resolvedSrc, setResolvedSrc] = useState(thumbnailStorageKey ? "" : thumbnailUrl || src);
+
+    useEffect(() => {
+        if (!thumbnailUrl || !thumbnailStorageKey) {
+            setResolvedSrc(thumbnailUrl || src);
+            return;
+        }
+        let active = true;
+        let objectUrl = "";
+        void loadThumbnail(thumbnailStorageKey, thumbnailUrl)
+            .then((blob) => {
+                if (!active) return;
+                objectUrl = URL.createObjectURL(blob);
+                setResolvedSrc(objectUrl);
+            })
+            .catch(() => active && setResolvedSrc(src));
+        return () => {
+            active = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [src, thumbnailStorageKey, thumbnailUrl]);
+
+    if (!resolvedSrc) return <div className="h-full w-full" />;
+    return <img src={resolvedSrc} alt={alt} draggable={false} onDragStart={(event) => event.preventDefault()} className={`pointer-events-none block h-full w-full select-none ${freeResize ? "object-fill" : "object-contain"}`} />;
 }
 
 function ImageInfoBar({ node }: { node: CanvasNodeData }) {

@@ -22,10 +22,3 @@ export async function updateAsset(id: string, patch: Partial<Asset>) {
 export async function deleteAsset(id: string) {
     return apiJson<{ ok: boolean }>(`/api/assets/${id}`, { method: "DELETE" });
 }
-
-export async function replaceAssets(assets: Asset[]) {
-    return apiJson<{ assets: Asset[] }>("/api/assets/replace", {
-        method: "POST",
-        body: JSON.stringify({ assets }),
-    });
-}

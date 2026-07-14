@@ -9,6 +9,7 @@ import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audi
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
+import { cleanupExpiredThumbnails } from "@/services/thumbnail-cache";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -123,6 +124,7 @@ export default function CanvasPage() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        void cleanupExpiredThumbnails();
         setMounted(true);
     }, []);
 
@@ -729,15 +731,26 @@ function InfiniteCanvasPage() {
                     if (!node.metadata?.isBatchRoot || childIds?.length === node.metadata.batchChildIds?.length) return node;
                     const primaryImageId = childIds?.includes(node.metadata.primaryImageId || "") ? node.metadata.primaryImageId : childIds?.[0];
                     const primaryNode = next.find((item) => item.id === primaryImageId);
+                    const media = primaryNode?.metadata
+                        ? {
+                              content: primaryNode.metadata.content,
+                              storageKey: primaryNode.metadata.storageKey,
+                              thumbnailUrl: primaryNode.metadata.thumbnailUrl,
+                              thumbnailStorageKey: primaryNode.metadata.thumbnailStorageKey,
+                              naturalWidth: primaryNode.metadata.naturalWidth,
+                              naturalHeight: primaryNode.metadata.naturalHeight,
+                              bytes: primaryNode.metadata.bytes,
+                              mimeType: primaryNode.metadata.mimeType,
+                              freeResize: primaryNode.metadata.freeResize,
+                          }
+                        : {};
                     return {
                         ...node,
                         metadata: {
                             ...node.metadata,
                             batchChildIds: childIds,
                             primaryImageId,
-                            content: primaryNode?.metadata?.content || node.metadata.content,
-                            naturalWidth: primaryNode?.metadata?.naturalWidth || node.metadata.naturalWidth,
-                            naturalHeight: primaryNode?.metadata?.naturalHeight || node.metadata.naturalHeight,
+                            ...media,
                         },
                     };
                 });
@@ -1203,7 +1216,7 @@ function InfiniteCanvasPage() {
     }, [finishNodeDrag, handleGlobalMouseMove, handleGlobalMouseUp, handleGlobalPointerMove]);
 
     const createImageFileNode = useCallback(async (file: File, position: Position) => {
-        const image = await uploadImage(file);
+        const image = await uploadImage(file, true);
         const size = fitNodeSize(image.width, image.height);
         const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const newNode: CanvasNodeData = {
@@ -1451,9 +1464,14 @@ function InfiniteCanvasPage() {
                           metadata: {
                               ...node.metadata,
                               content: child.metadata?.content,
+                              storageKey: child.metadata?.storageKey,
+                              thumbnailUrl: child.metadata?.thumbnailUrl,
+                              thumbnailStorageKey: child.metadata?.thumbnailStorageKey,
                               primaryImageId: child.id,
                               naturalWidth: child.metadata?.naturalWidth,
                               naturalHeight: child.metadata?.naturalHeight,
+                              bytes: child.metadata?.bytes,
+                              mimeType: child.metadata?.mimeType,
                               freeResize: child.metadata?.freeResize,
                           },
                       }
@@ -1572,7 +1590,7 @@ function InfiniteCanvasPage() {
     const cropImageNode = useCallback(async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
         if (!node.metadata?.content) return;
         const cropped = await cropDataUrl(node.metadata.content, crop);
-        const image = await uploadImage(cropped);
+        const image = await uploadImage(cropped, true);
         const width = Math.min(node.width, Math.max(220, image.width));
         const childId = nanoid();
         const child: CanvasNodeData = {
@@ -1606,7 +1624,7 @@ function InfiniteCanvasPage() {
             const startY = node.position.y;
             const childNodes = await Promise.all(
                 pieces.map(async (piece) => {
-                    const image = await uploadImage(piece.dataUrl);
+                    const image = await uploadImage(piece.dataUrl, true);
                     const id = nanoid();
                     return {
                         id,
@@ -1666,7 +1684,7 @@ function InfiniteCanvasPage() {
             const controller = startGenerationRequest(childId, node.id, childId);
             try {
                 const image = await requestEdit(generationConfig, requestPrompt, [source], { id: `${node.id}-mask`, name: "mask.png", type: "image/png", dataUrl: payload.maskDataUrl }, { signal: controller.signal }).then((items) => items[0]);
-                const uploaded = await uploadImage(image.dataUrl);
+                const uploaded = await uploadImage(image.dataUrl, true);
                 const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt: userPrompt, requestPrompt, maskDataUrl: payload.maskDataUrl, ...generationMetadata } } : item)));
             } catch (error) {
@@ -1686,7 +1704,7 @@ function InfiniteCanvasPage() {
         if (!node.metadata?.content) return;
         setUpscaleNodeId(null);
         const upscaled = await upscaleDataUrl(node.metadata.content, params);
-        const image = await uploadImage(upscaled);
+        const image = await uploadImage(upscaled, true);
         const size = fitNodeSize(image.width, image.height);
         const childId = nanoid();
         const child: CanvasNodeData = {
@@ -1744,7 +1762,7 @@ function InfiniteCanvasPage() {
                 const image = await requestEdit(generationConfig, prompt, [{ id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey }], undefined, { signal: controller.signal }).then(
                     (items) => items[0],
                 );
-                const uploaded = await uploadImage(image.dataUrl);
+                const uploaded = await uploadImage(image.dataUrl, true);
                 const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item)));
             } catch (error) {
@@ -1796,7 +1814,7 @@ function InfiniteCanvasPage() {
                     event.target.value = "";
                     return;
                 }
-                const image = await uploadImage(file);
+                const image = await uploadImage(file, true);
                 const size = fitNodeSize(image.width, image.height);
                 setNodes((prev) =>
                     prev.map((node) =>
@@ -2011,7 +2029,7 @@ function InfiniteCanvasPage() {
                                 const image = referenceImages.length
                                     ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, undefined, { signal: controller.signal }).then((items) => items[0])
                                     : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal }).then((items) => items[0]);
-                                const uploaded = await uploadImage(image.dataUrl);
+                                const uploaded = await uploadImage(image.dataUrl, true);
                                 const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                                 setNodes((prev) => {
                                     const root = prev.find((node) => node.id === rootId);
@@ -2264,7 +2282,7 @@ function InfiniteCanvasPage() {
                 }
 
                 const image = useReferenceImages ? await requestEdit(generationConfig, retryPrompt, retryImages, retryMask, { signal: controller.signal }).then((items) => items[0]) : await requestGeneration(generationConfig, prompt, { signal: controller.signal }).then((items) => items[0]);
-                const uploadedImage = await uploadImage(image.dataUrl);
+                const uploadedImage = await uploadImage(image.dataUrl, true);
                 const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
                 const imageSize = fitNodeSize(uploadedImage.width, uploadedImage.height, imageConfig.width, imageConfig.height);
                 const generationMetadata = savedImageMetadata?.generationType
@@ -2876,7 +2894,17 @@ function audioExtension(mimeType?: string) {
 }
 
 function imageMetadata(image: UploadedImage): CanvasNodeMetadata {
-    return { content: image.url, storageKey: image.storageKey, status: "success", naturalWidth: image.width, naturalHeight: image.height, bytes: image.bytes, mimeType: image.mimeType };
+    return {
+        content: image.url,
+        storageKey: image.storageKey,
+        thumbnailUrl: image.thumbnailUrl,
+        thumbnailStorageKey: image.thumbnailStorageKey,
+        status: "success",
+        naturalWidth: image.width,
+        naturalHeight: image.height,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
+    };
 }
 
 function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
@@ -2938,9 +2966,17 @@ async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
             const content = node.metadata?.content;
             if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
             if (node.type !== CanvasNodeType.Image || !content) return node;
-            if (node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveImageUrl(node.metadata.storageKey, content) } };
+            if (node.metadata?.storageKey)
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        content: await resolveImageUrl(node.metadata.storageKey, content),
+                        thumbnailUrl: await resolveImageUrl(node.metadata.thumbnailStorageKey, node.metadata.thumbnailUrl || ""),
+                    },
+                };
             if (!content.startsWith("data:image/")) return node;
-            return { ...node, metadata: { ...node.metadata, ...imageMetadata(await uploadImage(content)) } };
+            return { ...node, metadata: { ...node.metadata, ...imageMetadata(await uploadImage(content, true)) } };
         }),
     );
 }

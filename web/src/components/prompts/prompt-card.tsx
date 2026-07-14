@@ -22,7 +22,7 @@ export function PromptCard({
     extraAction?: ReactNode;
 }) {
     return (
-        <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }}>
+        <Card hoverable className="overflow-hidden border-stone-200/90 bg-[#fffdf9]/90 shadow-[0_10px_28px_rgba(41,37,36,.05)] dark:border-stone-800 dark:bg-stone-900/80" styles={{ body: { padding: 0 } }}>
             {item.coverUrl ? (
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     <img src={item.coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" />

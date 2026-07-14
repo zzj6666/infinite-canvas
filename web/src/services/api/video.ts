@@ -38,8 +38,16 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
         const content: Array<Record<string, unknown>> = [];
         if (prompt.trim()) content.push({ type: "text", text: prompt });
         for (const image of references) {
-            const dataUrl = await imageToDataUrl(image);
-            if (dataUrl) content.push({ type: "image_url", image_url: { url: dataUrl } });
+            const url = image.storageKey ? `media://${encodeURIComponent(image.storageKey)}` : await imageToDataUrl(image);
+            if (url) content.push({ type: "image_url", image_url: { url }, role: "reference_image" });
+        }
+        for (const video of videoReferences) {
+            const url = video.storageKey ? `media://${encodeURIComponent(video.storageKey)}` : video.url;
+            if (url) content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
+        }
+        for (const audio of audioReferences) {
+            const url = audio.storageKey ? `media://${encodeURIComponent(audio.storageKey)}` : audio.url;
+            if (url) content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
         }
         const payload = {
             model: selectedModel,

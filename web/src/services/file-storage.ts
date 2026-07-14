@@ -35,21 +35,6 @@ export async function setMediaBlob(storageKey: string, blob: Blob) {
     return mediaUrl(saved.storageKey);
 }
 
-export async function deleteStoredMedia(_keys: Iterable<string>) {
-    // no-op in MVP
-}
-
-export async function cleanupUnusedMedia(_args?: unknown) {
-    // no-op in MVP
-}
-
-export function collectMediaStorageKeys(value: unknown, keys = new Set<string>()) {
-    if (!value || typeof value !== "object") return keys;
-    if ("storageKey" in value && typeof value.storageKey === "string" && value.storageKey.includes(":")) keys.add(value.storageKey);
-    Object.values(value).forEach((item) => (Array.isArray(item) ? item.forEach((child) => collectMediaStorageKeys(child, keys)) : collectMediaStorageKeys(item, keys)));
-    return keys;
-}
-
 function readVideoMeta(url: string) {
     return new Promise<{ width: number; height: number; durationMs?: number }>((resolve) => {
         const video = document.createElement("video");

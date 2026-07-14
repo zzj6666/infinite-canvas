@@ -8,5 +8,6 @@ services:
       ADMIN_PASSWORD: admin123
       DATA_DIR: /data
       STATIC_DIR: /app/web/dist
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
     volumes:
       - ./data:/data

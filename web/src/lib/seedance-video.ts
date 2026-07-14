@@ -1,6 +1,5 @@
 import { modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
-import type { ReferenceImage } from "@/types/image";
-import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
+import type { ReferenceVideo } from "@/types/media";
 
 export const SEEDANCE_REFERENCE_LIMITS = {
     images: 9,
@@ -15,6 +14,7 @@ export const seedanceResolutionOptions = [
     { value: "480p", label: "480p" },
     { value: "720p", label: "720p" },
     { value: "1080p", label: "1080p" },
+    { value: "4k", label: "4K" },
 ] as const;
 
 export const seedanceRatioOptions = [
@@ -58,7 +58,7 @@ const seedancePixels = {
 
 export function isSeedanceVideoConfig(config: AiConfig | Pick<AiConfig, "model" | "videoModel" | "baseUrl">) {
     const requestConfig = "channels" in config ? resolveModelRequestConfig(config, config.model || config.videoModel) : config;
-    return isSeedanceVideoModel(modelOptionName(requestConfig.model || requestConfig.videoModel)) || isArkPlanBaseUrl(requestConfig.baseUrl);
+    return isSeedanceVideoModel(modelOptionName(requestConfig.model || requestConfig.videoModel)) || isArkPlanBaseUrl(requestConfig.baseUrl) || ("apiFormat" in requestConfig && requestConfig.apiFormat === "ark");
 }
 
 export function isSeedanceVideoModel(model: string) {
@@ -71,6 +71,11 @@ export function isSeedanceFastModel(model: string) {
     return isSeedanceVideoModel(value) && value.includes("fast");
 }
 
+export function isSeedance4KModel(model: string) {
+    const value = model.toLowerCase();
+    return value.includes("seedance-2-0") && !value.includes("fast") && !value.includes("mini");
+}
+
 export function isArkPlanBaseUrl(baseUrl: string) {
     return baseUrl.toLowerCase().includes("ark.cn-beijing.volces.com/api/plan/v3") || baseUrl.toLowerCase().includes("/api/plan/v3");
 }
@@ -78,13 +83,15 @@ export function isArkPlanBaseUrl(baseUrl: string) {
 export function normalizeSeedanceResolution(value: string, model = "") {
     const normalized = normalizeResolutionToken(value);
     if (isSeedanceFastModel(model) && normalized === "1080p") return "720p";
+    if (normalized === "4k") return isSeedance4KModel(model) ? normalized : "720p";
     return seedanceResolutionOptions.some((item) => item.value === normalized) ? normalized : "720p";
 }
 
 export function normalizeResolutionToken(value: string) {
     if (value === "low") return "480p";
     if (value === "auto" || value === "high" || value === "medium") return "720p";
-    const resolution = String(value || "").replace(/p$/i, "") || "720";
+    const resolution = String(value || "").toLowerCase().replace(/p$/i, "") || "720";
+    if (resolution === "4k") return resolution;
     return `${resolution}p`;
 }
 
@@ -115,10 +122,12 @@ export function normalizeSeedanceRatio(value: string) {
 }
 
 export function seedancePixelLabel(resolution: string, ratio: string) {
-    const normalizedResolution = normalizeSeedanceResolution(resolution) as keyof typeof seedancePixels;
-    const normalizedRatio = normalizeSeedanceRatio(ratio) as keyof (typeof seedancePixels)[typeof normalizedResolution] | "adaptive";
+    const normalizedResolution = normalizeSeedanceResolution(resolution);
+    if (normalizedResolution === "4k") return "4K";
+    const pixels = seedancePixels[normalizedResolution as keyof typeof seedancePixels];
+    const normalizedRatio = normalizeSeedanceRatio(ratio) as keyof typeof pixels | "adaptive";
     if (normalizedRatio === "adaptive") return "自动匹配";
-    return seedancePixels[normalizedResolution][normalizedRatio] || "";
+    return pixels[normalizedRatio] || "";
 }
 
 export function boolConfig(value: string | undefined, fallback: boolean) {
@@ -131,17 +140,6 @@ export function seedanceReferenceLabel(kind: "image" | "video" | "audio", index:
     if (kind === "image") return `图片${index + 1}`;
     if (kind === "video") return `视频${index + 1}`;
     return `音频${index + 1}`;
-}
-
-export function buildSeedancePromptText(prompt: string, images: ReferenceImage[], videos: ReferenceVideo[], audios: ReferenceAudio[]) {
-    const labels = [
-        ...images.map((_, index) => seedanceReferenceLabel("image", index)),
-        ...videos.map((_, index) => seedanceReferenceLabel("video", index)),
-        ...audios.map((_, index) => seedanceReferenceLabel("audio", index)),
-    ];
-    const text = prompt.trim();
-    if (!labels.length) return text;
-    return `参考素材编号：${labels.join("、")}。请按这些编号理解提示词中的图片、视频和音频引用。\n\n${text}`;
 }
 
 export function seedanceVideoReferenceError(videos: ReferenceVideo[]) {

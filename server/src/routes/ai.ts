@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 
 import { assertProviderReady, buildApiUrl, loadSystemConfig, modelOptionName, resolveModelRequestConfig, type ApiCallFormat } from "../ai/config";
+import { PUBLIC_ORIGIN } from "../env";
 import type { AppVariables } from "../middleware";
 import { requireAdmin, requireAuth } from "../middleware";
+import { createPublicMediaToken } from "../storage/public-media";
 
 export const aiRoutes = new Hono<{ Variables: AppVariables }>();
 aiRoutes.use("*", requireAuth);
@@ -42,10 +44,11 @@ aiRoutes.post("/models", requireAdmin, async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== "object") return c.json({ error: "无效渠道配置" }, 400);
     const input = body as Record<string, unknown>;
+    const apiFormat: ApiCallFormat = input.apiFormat === "gemini" ? "gemini" : input.apiFormat === "ark" ? "ark" : "openai";
     const channel = {
         baseUrl: String(input.baseUrl || ""),
         apiKey: String(input.apiKey || ""),
-        apiFormat: input.apiFormat === "gemini" ? "gemini" : "openai",
+        apiFormat,
     };
     assertProviderReady({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, model: "x" });
 
@@ -60,6 +63,8 @@ aiRoutes.post("/models", requireAdmin, async (c) => {
             .sort((a, b) => a.localeCompare(b));
         return c.json({ models });
     }
+
+    if (channel.apiFormat === "ark") return c.json({ error: "火山方舟不提供模型列表，请手动填写模型 ID" }, 400);
 
     const response = await fetch(buildApiUrl(channel.baseUrl, "/models"), {
         headers: { Authorization: `Bearer ${channel.apiKey}` },
@@ -299,6 +304,7 @@ aiRoutes.post("/videos", async (c) => {
     const selectedModel = String(body.model || config.videoModel || config.model || "");
     const request = resolveModelRequestConfig(config, selectedModel);
     assertProviderReady(request);
+    const user = c.get("user");
     // Seedance / plan style JSON
     const base = request.baseUrl.trim().replace(/\/+$/, "");
     const url = /\/api\/plan\/v3$/i.test(base) || base.includes("/contents/generations/tasks")
@@ -307,7 +313,7 @@ aiRoutes.post("/videos", async (c) => {
     const response = await fetch(url, {
         method: "POST",
         headers: openaiHeaders(request.apiKey, "application/json"),
-        body: JSON.stringify({ ...body, model: modelOptionName(selectedModel) || request.model }),
+        body: JSON.stringify({ ...body, model: modelOptionName(selectedModel) || request.model, content: publicArkContent(body.content, c.req.url, user.id) }),
     });
     if (!response.ok) return c.json({ error: await readUpstreamError(response, "视频任务创建失败") }, 502);
     return c.json(await response.json());
@@ -353,6 +359,24 @@ function seedanceTaskUrl(baseUrl: string, taskId?: string) {
     }
     if (/\/api\/plan\/v3$/i.test(base)) return `${base}/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`;
     return `${base}/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`;
+}
+
+function publicArkContent(value: unknown, requestUrl: string, userId: string) {
+    if (!Array.isArray(value)) return value;
+    const origin = PUBLIC_ORIGIN || new URL(requestUrl).origin;
+    return value.map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const content = { ...(item as Record<string, unknown>) };
+        for (const key of ["image_url", "video_url", "audio_url"] as const) {
+            const media = content[key];
+            if (!media || typeof media !== "object") continue;
+            const url = String((media as Record<string, unknown>).url || "");
+            if (!url.startsWith("media://")) continue;
+            const storageKey = decodeURIComponent(url.slice("media://".length));
+            content[key] = { ...(media as Record<string, unknown>), url: `${origin}/api/media/shared/${createPublicMediaToken(userId, storageKey)}` };
+        }
+        return content;
+    });
 }
 
 function isGptImageModel(model: string) {

@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { Switch } from "antd";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
-import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceDurationOptions, seedancePixelLabel, seedanceRatioOptions, seedanceResolutionOptions } from "@/lib/seedance-video";
+import { boolConfig, isSeedance4KModel, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceDurationOptions, seedancePixelLabel, seedanceRatioOptions, seedanceResolutionOptions } from "@/lib/seedance-video";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { modelOptionName, type AiConfig } from "@/stores/use-config-store";
 
@@ -21,10 +21,6 @@ const sizeOptions = [
 ];
 
 const secondOptions = [6, 10, 12, 16, 20];
-
-export const videoResolutionOptions = resolutionOptions.map((item) => ({ value: item.value, label: item.label }));
-export const videoSizeOptions = sizeOptions.map((item) => ({ value: item.value, label: item.label }));
-export const videoSecondOptions = secondOptions.map((value) => String(value));
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
@@ -119,7 +115,7 @@ function SeedanceVideoSettingsPanel({ config, onConfigChange, theme, showTitle, 
                 <SettingGroup title="分辨率" color={theme.node.muted}>
                     <div className="grid grid-cols-3 gap-2.5">
                         {seedanceResolutionOptions.map((item) => {
-                            const disabled = item.value === "1080p" && isSeedanceFastModel(model);
+                            const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || (item.value === "4k" && !isSeedance4KModel(model));
                             return (
                                 <OptionPill key={item.value} selected={resolution === item.value} disabled={disabled} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                     {item.label}
@@ -127,7 +123,7 @@ function SeedanceVideoSettingsPanel({ config, onConfigChange, theme, showTitle, 
                             );
                         })}
                     </div>
-                    {isSeedanceFastModel(model) ? <div className="text-[11px] leading-4 opacity-55">fast 模型不支持 1080p，会自动使用 720p。</div> : null}
+                    {isSeedanceFastModel(model) ? <div className="text-[11px] leading-4 opacity-55">fast 模型不支持 1080p 和 4K，会自动使用 720p。</div> : null}
                 </SettingGroup>
                 <SettingGroup title="比例" color={theme.node.muted}>
                     <div className="grid grid-cols-3 gap-2.5">

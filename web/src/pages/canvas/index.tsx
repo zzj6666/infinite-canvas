@@ -1,28 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { App, Button } from "antd";
-import { Download, FileUp, Plus } from "lucide-react";
-
-import { readZip } from "@/lib/zip";
-import { setMediaBlob } from "@/services/file-storage";
-import { setImageBlob } from "@/services/image-storage";
+import { Button } from "antd";
+import { Plus } from "lucide-react";
 import { CanvasDeleteProjectsDialog } from "@/components/canvas/canvas-delete-projects-dialog";
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
-import type { CanvasExportFile } from "@/types/canvas-export";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
-import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 
 export default function CanvasPage() {
-    const { message } = App.useApp();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const inputRef = useRef<HTMLInputElement>(null);
     const autoOpenRef = useRef(false);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const projects = useCanvasStore((state) => state.projects);
     const createProject = useCanvasStore((state) => state.createProject);
-    const importProject = useCanvasStore((state) => state.importProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
@@ -33,32 +24,6 @@ export default function CanvasPage() {
     const createAndEnter = () => {
         void createProject(`无限画布 ${projects.length + 1}`).then((id) => enterProject(id));
     };
-    const importCanvas = async (file?: File) => {
-        if (!file) return;
-        try {
-            const zip = await readZip(file);
-            const projectFile = zip.get("projects.json");
-            if (!projectFile) throw new Error("missing projects.json");
-            const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
-            await Promise.all(
-                data.projects.flatMap((project) =>
-                    project.files.map(async (item) => {
-                        const blob = zip.get(item.path);
-                        if (!blob) return;
-                        const typedBlob = blob.type ? blob : blob.slice(0, blob.size, item.mimeType);
-                        await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
-                    }),
-                ),
-            );
-            await Promise.all(data.projects.map((item) => importProject(item.project)));
-            message.success(`已导入 ${data.projects.length} 个画布`);
-        } catch {
-            message.error("导入失败，请选择有效的画布压缩包");
-        } finally {
-            if (inputRef.current) inputRef.current.value = "";
-        }
-    };
-
     useEffect(() => {
         if (!hydrated || autoOpenRef.current || (mode !== "new" && mode !== "recent")) return;
         autoOpenRef.current = true;
@@ -72,12 +37,12 @@ export default function CanvasPage() {
         })();
     }, [createProject, hydrated, mode, projects]);
 
-    if (hydrated && (mode === "new" || mode === "recent")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
+    if (hydrated && (mode === "new" || mode === "recent")) return <main className="app-page flex h-full items-center justify-center text-sm text-stone-500">正在打开画布...</main>;
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-6 dark:border-stone-800">
+        <main className="app-page h-full overflow-auto text-stone-950 dark:text-stone-100">
+            <div className="app-page-shell flex max-w-6xl flex-col gap-8">
+                <header className="app-page-header flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <p className="text-xs text-stone-500">画布库</p>
                         <h1 className="mt-3 text-3xl font-semibold">无限画布</h1>
@@ -85,9 +50,6 @@ export default function CanvasPage() {
                     <div className="flex items-center gap-2">
                         {selectedIds.length ? (
                             <>
-                                <Button disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>
-                                    导出选中
-                                </Button>
                                 <Button disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>
                                     删除选中
                                 </Button>
@@ -98,9 +60,6 @@ export default function CanvasPage() {
                                 删除全部
                             </Button>
                         ) : null}
-                        <Button disabled={!hydrated} icon={<FileUp className="size-4" />} onClick={() => inputRef.current?.click()}>
-                            导入画布
-                        </Button>
                         <Button disabled={!hydrated} type="primary" icon={<Plus className="size-4" />} onClick={createAndEnter}>
                             新建画布
                         </Button>
@@ -108,7 +67,7 @@ export default function CanvasPage() {
                 </header>
 
                 {!hydrated ? (
-                    <section className="flex min-h-[360px] items-center justify-center border-y border-stone-200 text-sm text-stone-500 dark:border-stone-800">正在加载画布...</section>
+                    <section className="app-surface flex min-h-[360px] items-center justify-center rounded-2xl text-sm text-stone-500">正在加载画布...</section>
                 ) : projects.length ? (
                     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                         {projects.map((project) => (
@@ -116,7 +75,7 @@ export default function CanvasPage() {
                         ))}
                     </div>
                 ) : (
-                    <section className="flex min-h-[360px] flex-col items-center justify-center border-y border-stone-200 text-center dark:border-stone-800">
+                    <section className="app-surface flex min-h-[360px] flex-col items-center justify-center rounded-2xl text-center">
                         <h2 className="text-xl font-medium">还没有画布</h2>
                         <p className="mt-3 text-sm text-stone-500">新建一个画布后，就可以独立保存节点、连线和画布外观。</p>
                         <Button type="primary" className="mt-6" icon={<Plus className="size-4" />} onClick={createAndEnter}>
@@ -126,7 +85,6 @@ export default function CanvasPage() {
                 )}
             </div>
 
-            <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
             <CanvasDeleteProjectsDialog />
         </main>
     );

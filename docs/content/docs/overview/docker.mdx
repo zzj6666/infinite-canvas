@@ -29,6 +29,16 @@ http://localhost:3000
 docker compose -f docker-compose.local.yml up -d --build
 ```
 
+## 反向代理与方舟参考素材
+
+如通过 HTTPS 反向代理部署，且需要在火山方舟 Seedance 任务中使用本地图片、视频或音频参考，请在 `.env` 设置站点的公网地址：
+
+```bash
+PUBLIC_ORIGIN=https://canvas.example.com
+```
+
+方舟将通过该地址读取短时共享的参考素材。
+
 ## 文档站镜像
 
 文档站位于 `docs/` 目录，按带服务端能力的 Next.js standalone 应用单独构建，不打进主应用镜像。
@@ -49,4 +59,4 @@ docker compose -f docker-compose.local.yml up -d --build
 
 ## 数据说明
 
-当前主应用镜像只启动 Next.js。画布、我的素材、生成记录和 AI API Key 默认保存在浏览器本地；第三方提示词由浏览器前端直连拉取，不需要额外挂载数据目录。
+主应用镜像启动服务端 API 和前端静态资源。画布、我的素材和媒体文件保存在 `DATA_DIR`；Docker Compose 默认使用命名 volume 持久化，生产环境应定期备份该数据卷。

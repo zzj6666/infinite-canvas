@@ -18,18 +18,18 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-14 shrink-0 border-b border-stone-200 bg-background/90 backdrop-blur-xl dark:border-stone-800">
-                    <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-6">
+                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-stone-200/80 bg-background/80 backdrop-blur-xl dark:border-stone-800/80">
+                    <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
-                            <Link to="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300">
+                            <Link to="/" className="flex h-full shrink-0 items-center gap-2.5 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300">
                                 <span
-                                    className="size-5 shrink-0 bg-current"
+                                    className="size-6 shrink-0 rounded-md bg-current p-0.5"
                                     style={{
                                         mask: "url(/logo.svg) center / contain no-repeat",
                                         WebkitMask: "url(/logo.svg) center / contain no-repeat",
                                     }}
                                 />
-                                <span className="text-base font-medium">无限画布</span>
+                                <span className="text-[15px] font-semibold">无限画布</span>
                             </Link>
 
                             <button
@@ -42,7 +42,7 @@ export function AppTopNav() {
                                 <Menu className="size-5" />
                             </button>
 
-                            <nav className="hide-scrollbar ml-8 hidden h-14 min-w-0 items-center gap-7 overflow-x-auto md:flex">
+                            <nav className="hide-scrollbar ml-8 hidden min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-stone-200/80 bg-stone-100/70 p-1 dark:border-stone-800 dark:bg-stone-900/70 md:flex">
                                 {navigationTools.map((tool) => {
                                     const Icon = tool.icon;
                                     const active = tool.slug === activeToolSlug;
@@ -51,10 +51,10 @@ export function AppTopNav() {
                                             key={tool.slug}
                                             to={`/${tool.slug}`}
                                             className={cn(
-                                                "relative flex h-14 shrink-0 items-center gap-2 text-sm leading-6 transition after:absolute after:inset-x-0 after:bottom-0 after:h-px",
+                                                "relative flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm transition",
                                                 active
-                                                    ? "font-medium text-stone-950 after:bg-stone-950 dark:text-stone-100 dark:after:bg-stone-100"
-                                                    : "text-stone-500 after:bg-transparent hover:text-stone-950 dark:text-stone-400 dark:hover:text-stone-100",
+                                                    ? "bg-background font-medium text-stone-950 shadow-sm dark:bg-stone-800 dark:text-stone-100"
+                                                    : "text-stone-500 hover:bg-stone-200/70 hover:text-stone-950 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100",
                                             )}
                                         >
                                             <Icon className="size-4" />

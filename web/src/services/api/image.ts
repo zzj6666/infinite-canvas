@@ -1,11 +1,9 @@
-import { nanoid } from "nanoid";
-
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { modelOptionName, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
-import { apiFetch, apiJson } from "./client";
+import { apiJson } from "./client";
 
 export type AiTextMessage = {
     role: "system" | "user" | "assistant";
@@ -66,19 +64,8 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
     return content;
 }
 
-export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat">) {
-    // Prefer server-side model listing when channel id is available via admin UI.
-    void config;
-    throw new Error("请在配置页通过服务端拉取模型");
-}
-
 export async function fetchChannelModels(channel: ModelChannel) {
     const { fetchChannelModelsFromServer } = await import("./system-config");
     const result = await fetchChannelModelsFromServer(channel);
     return result.models;
-}
-
-// Keep helper for any remaining call sites expecting generated image ids.
-export function createGeneratedImageId() {
-    return nanoid();
 }

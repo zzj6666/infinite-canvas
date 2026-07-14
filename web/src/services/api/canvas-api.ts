@@ -29,10 +29,3 @@ export async function deleteCanvasProjects(ids: string[]) {
         body: JSON.stringify({ ids }),
     });
 }
-
-export async function importCanvasProject(project: Partial<CanvasProject>) {
-    return apiJson<{ project: CanvasProject }>("/api/canvas/projects/import", {
-        method: "POST",
-        body: JSON.stringify({ project }),
-    });
-}

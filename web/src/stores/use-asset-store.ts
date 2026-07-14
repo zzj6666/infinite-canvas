@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { createAsset, deleteAsset, fetchAssets, replaceAssets as replaceAssetsApi, updateAsset as updateAssetApi } from "@/services/api/assets-api";
+import { createAsset, deleteAsset, fetchAssets, updateAsset as updateAssetApi } from "@/services/api/assets-api";
 import { mediaUrl } from "@/services/api/media-api";
 
 export type AssetKind = "text" | "image" | "video";
@@ -29,7 +29,6 @@ type AssetStore = {
     addAsset: (asset: Omit<Asset, "id" | "createdAt" | "updatedAt">) => string;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
-    replaceAssets: (assets: Asset[]) => void;
     cleanupImages: (extra?: unknown) => void;
     reset: () => void;
 };
@@ -89,11 +88,6 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     removeAsset: (id) => {
         set((state) => ({ assets: state.assets.filter((asset) => asset.id !== id) }));
         void deleteAsset(id).catch((error) => console.error(error));
-    },
-    replaceAssets: (assets) => {
-        const next = assets.map(hydrateAssetUrls);
-        set({ assets: next });
-        void replaceAssetsApi(next).catch((error) => console.error(error));
     },
     cleanupImages: () => {
         // server-side GC not implemented in MVP

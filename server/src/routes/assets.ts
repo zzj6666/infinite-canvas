@@ -86,32 +86,3 @@ assetRoutes.delete("/:id", (c) => {
     if (!result.changes) return c.json({ error: "素材不存在" }, 404);
     return c.json({ ok: true });
 });
-
-assetRoutes.post("/replace", async (c) => {
-    const user = c.get("user");
-    const body = await c.req.json().catch(() => ({}));
-    const assets = Array.isArray(body.assets) ? body.assets : [];
-    const db = getDb();
-    const replace = db.transaction(() => {
-        db.query("DELETE FROM assets WHERE user_id = ?").run(user.id);
-        const now = new Date().toISOString();
-        for (const item of assets) {
-            const id = String(item.id || nanoid());
-            const kind = String(item.kind || "text");
-            const title = String(item.title || "未命名素材").trim() || "未命名素材";
-            const meta = { ...item };
-            delete meta.id;
-            delete meta.kind;
-            delete meta.title;
-            delete meta.createdAt;
-            delete meta.updatedAt;
-            db.query(
-                `INSERT INTO assets (id, user_id, kind, title, meta_json, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            ).run(id, user.id, kind, title, JSON.stringify(meta), item.createdAt || now, item.updatedAt || now);
-        }
-    });
-    replace();
-    const rows = db.query("SELECT * FROM assets WHERE user_id = ? ORDER BY updated_at DESC").all(user.id) as AssetRow[];
-    return c.json({ assets: rows.map(rowToAsset) });
-});

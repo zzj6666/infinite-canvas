@@ -1,4 +1,4 @@
-import { apiFetch, apiJson } from "./client";
+import { apiJson } from "./client";
 
 export async function uploadMedia(file: Blob, prefix = "file", filename = "upload.bin", storageKey?: string) {
     const form = new FormData();
@@ -13,13 +13,4 @@ export async function uploadMedia(file: Blob, prefix = "file", filename = "uploa
 
 export function mediaUrl(storageKey: string) {
     return `/api/media/${encodeURIComponent(storageKey)}`;
-}
-
-export async function deleteMedia(storageKey: string) {
-    return apiJson<{ ok: boolean }>(mediaUrl(storageKey), { method: "DELETE" });
-}
-
-export async function fetchMediaBlob(storageKey: string) {
-    const response = await apiFetch(mediaUrl(storageKey));
-    return response.blob();
 }
