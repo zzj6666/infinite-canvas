@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { fetchMe, login as loginRequest, logout as logoutRequest, type AuthUser } from "@/services/api/auth";
+import { fetchMe, login as loginRequest, logout as logoutRequest, updateMyProfile as updateMyProfileRequest, type AuthUser } from "@/services/api/auth";
 
 type UserStatus = "idle" | "loading" | "authenticated" | "anonymous";
 
@@ -11,6 +11,7 @@ type UserStore = {
     bootstrap: () => Promise<void>;
     login: (username: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
+    updateMyProfile: (patch: { displayName?: string; currentPassword?: string; password?: string }) => Promise<boolean>;
     setUser: (user: AuthUser | null) => void;
 };
 
@@ -39,5 +40,10 @@ export const useUserStore = create<UserStore>((set) => ({
         } finally {
             set({ user: null, status: "anonymous", error: "" });
         }
+    },
+    updateMyProfile: async (patch) => {
+        const result = await updateMyProfileRequest(patch);
+        set({ user: result.passwordChanged ? null : result.user, status: result.passwordChanged ? "anonymous" : "authenticated", error: "" });
+        return result.passwordChanged;
     },
 }));

@@ -261,11 +261,12 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                     },
                     {
                         key: "preferences",
-                        label: "生成偏好",
+                        label: "个人与偏好",
                         children: (
                             <Form layout="vertical" requiredMark={false}>
-                                <div className="mb-5">
-                                    <div className="text-base font-semibold">默认生成偏好</div>
+                                <ProfileSettings />
+                                <div className="mb-5 mt-5">
+                                    <div className="text-base font-semibold">创作偏好</div>
                                     <div className="mt-1 text-xs leading-5 text-stone-500">这些设置会作为新建画布节点的初始值，节点内仍可单独覆盖。</div>
                                 </div>
                                 <div className="grid gap-4 xl:grid-cols-[minmax(220px,.7fr)_minmax(0,1.3fr)]">
@@ -342,15 +343,20 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                         ),
                     },
                 ];
+    const preferencesTab = tabItems.find((item) => item.key === "preferences");
 
     return (
         <>
-            <Tabs
-                className="[&_.ant-tabs-nav]:mb-6 [&_.ant-tabs-nav]:before:hidden [&_.ant-tabs-tab]:rounded-lg [&_.ant-tabs-tab]:px-3 [&_.ant-tabs-tab-active]:bg-stone-100 dark:[&_.ant-tabs-tab-active]:bg-stone-800"
-                activeKey={activeTab}
-                onChange={(key) => setActiveTab(key as ConfigTabKey)}
-                items={tabItems.filter((item) => isAdmin || (item.key !== "channels" && item.key !== "models"))}
-            />
+            {isAdmin ? (
+                <Tabs
+                    className="[&_.ant-tabs-nav]:mb-6 [&_.ant-tabs-nav]:before:hidden [&_.ant-tabs-tab]:rounded-lg [&_.ant-tabs-tab]:px-3 [&_.ant-tabs-tab-active]:bg-stone-100 dark:[&_.ant-tabs-tab-active]:bg-stone-800"
+                    activeKey={activeTab}
+                    onChange={(key) => setActiveTab(key as ConfigTabKey)}
+                    items={tabItems}
+                />
+            ) : (
+                preferencesTab?.children
+            )}
             {showDoneButton ? (
                 <div className="mt-6 flex justify-end border-t border-stone-200 pt-4 dark:border-stone-800">
                     <Button type="primary" onClick={() => void finishConfig()}>
@@ -364,6 +370,67 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                     </Button>
                 </div>
             ) : null}
+        </>
+    );
+}
+
+function ProfileSettings() {
+    const { message } = App.useApp();
+    const user = useUserStore((state) => state.user);
+    const updateMyProfile = useUserStore((state) => state.updateMyProfile);
+    const [displayName, setDisplayName] = useState("");
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+
+    useEffect(() => {
+        setDisplayName(user?.displayName || user?.username || "");
+    }, [user]);
+
+    if (!user) return null;
+
+    const saveProfile = async () => {
+        if (password && password.length < 6) return message.warning("新密码至少 6 位");
+        if (password && password !== confirmPassword) return message.warning("两次输入的新密码不一致");
+        if (password && !currentPassword) return message.warning("请输入当前密码");
+        try {
+            const passwordChanged = await updateMyProfile({ displayName, currentPassword: password ? currentPassword : undefined, password: password || undefined });
+            message.success(passwordChanged ? "密码已修改，请重新登录" : "个人资料已保存");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存失败");
+        }
+    };
+
+    return (
+        <>
+            <div className="mb-5">
+                <div className="text-base font-semibold">个人资料</div>
+                <div className="mt-1 text-xs leading-5 text-stone-500">修改显示名或密码。修改密码后会退出该账号在所有设备上的登录状态。</div>
+            </div>
+            <section className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-stone-900/45">
+                <div className="grid gap-4 md:grid-cols-2">
+                    <Form.Item label="用户名" className="mb-0">
+                        <Input value={user.username} disabled />
+                    </Form.Item>
+                    <Form.Item label="显示名" className="mb-0">
+                        <Input value={displayName} maxLength={40} onChange={(event) => setDisplayName(event.target.value)} />
+                    </Form.Item>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <Form.Item label="当前密码" className="mb-0">
+                        <Input.Password value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                    </Form.Item>
+                    <Form.Item label="新密码" className="mb-0">
+                        <Input.Password placeholder="至少 6 位" value={password} onChange={(event) => setPassword(event.target.value)} />
+                    </Form.Item>
+                    <Form.Item label="确认新密码" className="mb-0">
+                        <Input.Password value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+                    </Form.Item>
+                </div>
+                <div className="mt-5 flex justify-end">
+                    <Button onClick={() => void saveProfile()}>保存个人资料</Button>
+                </div>
+            </section>
         </>
     );
 }

@@ -103,7 +103,7 @@ export default function AdminUsersPage() {
     const removeUser = (user: AuthUser) => {
         modal.confirm({
             title: "删除用户",
-            content: `确认删除 ${user.username}？其画布/素材/提示词也会删除。`,
+            content: `确认删除 ${user.username}？其画布和素材会删除，共享提示词会保留。`,
             okText: "删除",
             okButtonProps: { danger: true },
             onOk: async () => {

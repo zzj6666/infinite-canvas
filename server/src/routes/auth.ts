@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
-import { createSession, deleteSessionByToken, getUserBySessionToken, verifyPassword } from "../auth";
-import { findUserByUsername, toPublicUser } from "../db";
+import { createSession, deleteSessionByToken, deleteSessionsForUser, getUserBySessionToken, hashPassword, verifyPassword } from "../auth";
+import { findUserById, findUserByUsername, getDb, toPublicUser } from "../db";
 import { COOKIE_SECURE, SESSION_COOKIE, SESSION_DAYS } from "../env";
 import type { AppVariables } from "../middleware";
 import { requireAuth } from "../middleware";
@@ -49,4 +49,24 @@ authRoutes.get("/me", async (c) => {
 
 authRoutes.get("/session", requireAuth, async (c) => {
     return c.json({ user: toPublicUser(c.get("user")) });
+});
+
+authRoutes.patch("/me", requireAuth, async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json().catch(() => ({}));
+    const displayName = body.displayName !== undefined ? String(body.displayName || "").trim() || user.display_name : user.display_name;
+    const password = String(body.password || "");
+
+    if (password) {
+        const currentPassword = String(body.currentPassword || "");
+        if (!verifyPassword(currentPassword, user.password_hash)) return c.json({ error: "当前密码不正确" }, 400);
+        if (password.length < 6) return c.json({ error: "新密码至少 6 个字符" }, 400);
+        getDb().query("UPDATE users SET display_name = ?, password_hash = ? WHERE id = ?").run(displayName, hashPassword(password), user.id);
+        deleteSessionsForUser(user.id);
+        deleteCookie(c, SESSION_COOKIE, { path: "/" });
+        return c.json({ user: toPublicUser(findUserById(user.id) || user), passwordChanged: true });
+    }
+
+    getDb().query("UPDATE users SET display_name = ? WHERE id = ?").run(displayName, user.id);
+    return c.json({ user: toPublicUser(findUserById(user.id) || user), passwordChanged: false });
 });

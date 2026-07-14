@@ -24,6 +24,13 @@ export async function fetchMe() {
     return apiJson<{ user: AuthUser | null }>("/api/auth/me");
 }
 
+export async function updateMyProfile(patch: { displayName?: string; currentPassword?: string; password?: string }) {
+    return apiJson<{ user: AuthUser; passwordChanged: boolean }>("/api/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+    });
+}
+
 export async function listUsers() {
     return apiJson<{ users: AuthUser[] }>("/api/admin/users");
 }

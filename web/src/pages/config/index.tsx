@@ -12,7 +12,7 @@ export default function ConfigPage() {
                         工作空间设置
                     </div>
                     <h1 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-stone-950 sm:text-5xl dark:text-stone-100">配置与用户偏好</h1>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600 dark:text-stone-400">管理员统一维护 AI 渠道与模型范围，所有用户可在此查看自己的生成偏好。</p>
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600 dark:text-stone-400">管理员统一维护 AI 渠道与模型范围，所有用户可在此维护自己的生成偏好与个人资料。</p>
                 </header>
                 <div className="app-surface mt-7 rounded-2xl p-4 sm:p-6">
                     <AppConfigPanel />
