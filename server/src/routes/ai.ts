@@ -9,6 +9,8 @@ import { createPublicMediaToken } from "../storage/public-media";
 export const aiRoutes = new Hono<{ Variables: AppVariables }>();
 aiRoutes.use("*", requireAuth);
 
+const arkPlanModels = ["doubao-seed-2.0-mini", "doubao-seed-2.0-lite", "deepseek-v4-flash", "doubao-seed-2.0-code", "doubao-seed-2.0-pro", "deepseek-v4-pro", "minimax-m2.7", "minimax-m3", "glm-5.1", "kimi-k2.6", "doubao-embedding-vision", "doubao-seedream-5.0-lite", "doubao-seedance-2.0"];
+
 function openaiHeaders(apiKey: string, contentType?: string) {
     return {
         Authorization: `Bearer ${apiKey}`,
@@ -52,6 +54,9 @@ aiRoutes.post("/models", requireAdmin, async (c) => {
     };
     assertProviderReady({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, model: "x" });
 
+    const normalizedBaseUrl = channel.baseUrl.trim().replace(/\/+$/, "");
+    if (channel.apiFormat === "ark" && /\/api\/plan\/v3$/i.test(normalizedBaseUrl)) return c.json({ models: arkPlanModels });
+
     if (channel.apiFormat === "gemini") {
         const url = `${geminiBaseUrl(channel.baseUrl)}/models`;
         const response = await fetch(url, { headers: geminiHeaders(channel.apiKey) });
@@ -63,8 +68,6 @@ aiRoutes.post("/models", requireAdmin, async (c) => {
             .sort((a, b) => a.localeCompare(b));
         return c.json({ models });
     }
-
-    if (channel.apiFormat === "ark") return c.json({ error: "火山方舟不提供模型列表，请手动填写模型 ID" }, 400);
 
     const response = await fetch(buildApiUrl(channel.baseUrl, "/models"), {
         headers: { Authorization: `Bearer ${channel.apiKey}` },

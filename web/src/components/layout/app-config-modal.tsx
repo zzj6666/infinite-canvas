@@ -102,10 +102,6 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const refreshChannelModels = async (channel: ModelChannel) => {
-        if (channel.apiFormat === "ark") {
-            message.info("火山方舟模型请手动填写官方模型 ID");
-            return;
-        }
         if (!channel.baseUrl.trim() || !(channel.apiKey.trim() || channel.hasApiKey)) {
             message.error("请先填写该渠道的 Base URL 和 API Key");
             return;
@@ -123,7 +119,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     };
 
     const refreshAllModels = async () => {
-        const runnable = config.channels.filter((channel) => channel.enabled !== false && channel.apiFormat !== "ark" && channel.baseUrl.trim() && channel.apiKey.trim());
+        const runnable = config.channels.filter((channel) => channel.enabled !== false && channel.baseUrl.trim() && channel.apiKey.trim());
         if (!runnable.length) {
             message.error("请先填写至少一个可拉取模型渠道的 Base URL 和 API Key");
             return;
@@ -185,7 +181,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                                             <span>{channel.enabled !== false ? "已启用" : "已关闭"}</span>
                                                             <Switch size="small" checked={channel.enabled !== false} onChange={(enabled) => updateChannel(channel.id, { enabled })} />
                                                         </span>
-                                                        <Button size="small" type="text" className="!h-7 !rounded-lg !px-2" icon={<RefreshCw className="size-3.5" />} disabled={channel.enabled === false || channel.apiFormat === "ark"} loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
+                                                        <Button size="small" type="text" className="!h-7 !rounded-lg !px-2" icon={<RefreshCw className="size-3.5" />} disabled={channel.enabled === false} loading={loadingChannelId === channel.id} onClick={() => void refreshChannelModels(channel)}>
                                                             拉取模型
                                                         </Button>
                                                         <Button size="small" type="text" danger className="!h-7 !w-7 !rounded-lg !p-0" icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />

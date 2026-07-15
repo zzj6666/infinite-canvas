@@ -17,6 +17,12 @@ export const seedanceResolutionOptions = [
     { value: "4k", label: "4K" },
 ] as const;
 
+export function seedanceResolutionOptionsForModel(model: string) {
+    if (isSeedanceFastModel(model)) return seedanceResolutionOptions.slice(0, 2);
+    if (!isSeedance4KModel(model)) return seedanceResolutionOptions.slice(0, 3);
+    return seedanceResolutionOptions;
+}
+
 export const seedanceRatioOptions = [
     { value: "16:9", label: "横屏" },
     { value: "9:16", label: "竖屏" },
@@ -54,6 +60,14 @@ const seedancePixels = {
         "9:16": "1080x1920",
         "21:9": "2206x946",
     },
+    "4k": {
+        "16:9": "3840x2160",
+        "4:3": "2880x2160",
+        "1:1": "2160x2160",
+        "3:4": "2160x2880",
+        "9:16": "2160x3840",
+        "21:9": "3840x1646",
+    },
 } as const;
 
 export function isSeedanceVideoConfig(config: AiConfig | Pick<AiConfig, "model" | "videoModel" | "baseUrl">) {
@@ -73,7 +87,7 @@ export function isSeedanceFastModel(model: string) {
 
 export function isSeedance4KModel(model: string) {
     const value = model.toLowerCase();
-    return value.includes("seedance-2-0") && !value.includes("fast") && !value.includes("mini");
+    return (value.includes("seedance-2-0") || value.includes("seedance-2.0")) && !value.includes("fast") && !value.includes("mini");
 }
 
 export function isArkPlanBaseUrl(baseUrl: string) {
@@ -82,9 +96,8 @@ export function isArkPlanBaseUrl(baseUrl: string) {
 
 export function normalizeSeedanceResolution(value: string, model = "") {
     const normalized = normalizeResolutionToken(value);
-    if (isSeedanceFastModel(model) && normalized === "1080p") return "720p";
-    if (normalized === "4k") return isSeedance4KModel(model) ? normalized : "720p";
-    return seedanceResolutionOptions.some((item) => item.value === normalized) ? normalized : "720p";
+    const options = seedanceResolutionOptionsForModel(model);
+    return options.some((item) => item.value === normalized) ? normalized : options.find((item) => item.value === "720p")?.value || options[0].value;
 }
 
 export function normalizeResolutionToken(value: string) {
@@ -121,9 +134,8 @@ export function normalizeSeedanceRatio(value: string) {
     return options.reduce((best, item) => (Math.abs(item[1] - ratio) < Math.abs(best[1] - ratio) ? item : best), options[0])[0];
 }
 
-export function seedancePixelLabel(resolution: string, ratio: string) {
-    const normalizedResolution = normalizeSeedanceResolution(resolution);
-    if (normalizedResolution === "4k") return "4K";
+export function seedancePixelLabel(resolution: string, ratio: string, model = "") {
+    const normalizedResolution = normalizeSeedanceResolution(resolution, model);
     const pixels = seedancePixels[normalizedResolution as keyof typeof seedancePixels];
     const normalizedRatio = normalizeSeedanceRatio(ratio) as keyof typeof pixels | "adaptive";
     if (normalizedRatio === "adaptive") return "自动匹配";
