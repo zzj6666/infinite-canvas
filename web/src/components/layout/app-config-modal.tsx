@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import { fetchChannelModels } from "@/services/api/image";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
-import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, includeSeedreamModels, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 type ModelGroup = {
@@ -457,7 +457,7 @@ export function AppConfigModal() {
 
 function withChannels(config: AiConfig, channels: ModelChannel[]): AiConfig {
     const models = modelOptionsFromChannels(channels);
-    const imageModels = keepOrSuggest(config.imageModels, filterModelsByCapability(models, "image"), models);
+    const imageModels = includeSeedreamModels(keepOrSuggest(config.imageModels, filterModelsByCapability(models, "image"), models), models);
     const videoModels = keepOrSuggest(config.videoModels, filterModelsByCapability(models, "video"), models);
     const textModels = keepOrSuggest(config.textModels, filterModelsByCapability(models, "text"), models);
     const audioModels = keepOrSuggest(config.audioModels, filterModelsByCapability(models, "audio"), models);

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Square } from "lucide-react";
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, modelMatchesCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, resolveGenerationModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -37,10 +37,12 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const isRunningRef = useRef(isRunning);
+    isRunningRef.current = isRunning;
 
     useEffect(() => {
-        setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
-    }, [isEditingExistingContent, node.id]);
+        if (!isEditingExistingContent && !isRunningRef.current) setPrompt(node.metadata?.prompt || "");
+    }, [isEditingExistingContent, node.metadata?.prompt]);
 
     const updatePrompt = (value: string) => {
         setPrompt(value);
@@ -51,11 +53,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         const text = prompt.trim();
         if (!text || isRunning) return;
         onGenerate(node.id, mode, text);
-        setPrompt("");
     };
 
     return (
         <div
+            data-canvas-no-zoom
             className="w-full rounded-2xl border p-3 shadow-2xl backdrop-blur"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
@@ -121,14 +123,7 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
 }
 
 function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode): AiConfig {
-    const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
-    const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
-    const currentModel = node.metadata?.model;
-    const model = currentModel && modelMatchesCapability(currentModel, mode)
-        ? currentModel
-        : defaultModel && modelMatchesCapability(defaultModel, mode)
-            ? defaultModel
-            : fallbackModel;
+    const model = resolveGenerationModel(globalConfig, node.metadata?.model, mode);
     return {
         ...globalConfig,
         model,

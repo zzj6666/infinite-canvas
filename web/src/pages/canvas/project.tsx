@@ -7,7 +7,7 @@ import { saveAs } from "file-saver";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
-import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { defaultConfig, resolveGenerationModel, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { cleanupExpiredThumbnails } from "@/services/thumbnail-cache";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
@@ -89,6 +89,8 @@ type CanvasGenerationRequest = {
 
 const VIDEO_NODE_MAX_WIDTH = 420;
 const VIDEO_NODE_MAX_HEIGHT = 420;
+const EMPTY_NODE_INPUTS: NodeGenerationInput[] = [];
+const EMPTY_REFERENCES: ReturnType<typeof buildNodeMentionReferences> = [];
 const CONNECTION_HANDLE_HIT_RADIUS = 40;
 const CONNECTION_NODE_HIT_PADDING = 32;
 const NODE_STATUS_IDLE = "idle" as const;
@@ -2410,6 +2412,68 @@ function InfiniteCanvasPage() {
         [insertAssistantImage, insertAssistantText, screenToCanvas, size.height, size.width],
     );
 
+    const handleNodeViewImage = useCallback((node: CanvasNodeData) => {
+        setPreviewNodeId(node.id);
+    }, []);
+
+    const handleNodeRetry = useCallback(
+        (node: CanvasNodeData) => {
+            void handleRetryNode(node);
+        },
+        [handleRetryNode],
+    );
+
+    const handleNodeContextMenu = useCallback((event: ReactMouseEvent, nodeId: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setContextMenu({ type: "node", x: event.clientX, y: event.clientY, nodeId });
+    }, []);
+
+    const renderNodePanel = useCallback(
+        (panelNode: CanvasNodeData) =>
+            panelNode.type === CanvasNodeType.Config ? (
+                <CanvasConfigComposer
+                    value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
+                    inputs={configInputsById.get(panelNode.id) || EMPTY_NODE_INPUTS}
+                    onChange={(composerContent) => handleConfigNodeChange(panelNode.id, { composerContent })}
+                    onClose={() => setDialogNodeId(null)}
+                />
+            ) : (
+                <CanvasNodePromptPanel
+                    node={panelNode}
+                    isRunning={runningNodeId === panelNode.id}
+                    mentionReferences={mentionReferencesByNodeId.get(panelNode.id) || EMPTY_REFERENCES}
+                    onPromptChange={handleNodePromptChange}
+                    onConfigChange={handleConfigNodeChange}
+                    onGenerate={handleGenerateNode}
+                    onStop={confirmStopGeneration}
+                    onImageSettingsOpenChange={(open) => {
+                        setNodeImageSettingsOpen(open);
+                        if (open) setToolbarNodeId(null);
+                    }}
+                />
+            ),
+        [configInputsById, confirmStopGeneration, handleConfigNodeChange, handleGenerateNode, handleNodePromptChange, mentionReferencesByNodeId, runningNodeId],
+    );
+
+    const renderNodeContentPanel = useCallback(
+        (contentNode: CanvasNodeData) => (
+            <CanvasConfigNodePanel
+                node={contentNode}
+                isRunning={runningNodeId === contentNode.id}
+                inputSummary={getInputSummary(configInputsById.get(contentNode.id) || EMPTY_NODE_INPUTS)}
+                onConfigChange={handleConfigNodeChange}
+                onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
+                onStop={confirmStopGeneration}
+                onGenerate={(nodeId) => {
+                    const target = nodesRef.current.find((item) => item.id === nodeId);
+                    void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
+                }}
+            />
+        ),
+        [configInputsById, confirmStopGeneration, handleConfigNodeChange, handleGenerateNode, runningNodeId],
+    );
+
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
@@ -2506,45 +2570,9 @@ function InfiniteCanvasPage() {
                             batchMotion={batchMotionById.get(node.id)}
                             showImageInfo={showImageInfo}
                             resourceLabel={resourceReferenceByNodeId.get(node.id)}
-                            mentionReferences={mentionReferencesByNodeId.get(node.id) || []}
-                            renderPanel={(panelNode) =>
-                                panelNode.type === CanvasNodeType.Config ? (
-                                    <CanvasConfigComposer
-                                        value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
-                                        inputs={configInputsById.get(panelNode.id) || []}
-                                        onChange={(composerContent) => handleConfigNodeChange(panelNode.id, { composerContent })}
-                                        onClose={() => setDialogNodeId(null)}
-                                    />
-                                ) : (
-                                    <CanvasNodePromptPanel
-                                        node={panelNode}
-                                        isRunning={runningNodeId === panelNode.id}
-                                        mentionReferences={mentionReferencesByNodeId.get(panelNode.id) || []}
-                                        onPromptChange={handleNodePromptChange}
-                                        onConfigChange={handleConfigNodeChange}
-                                        onGenerate={handleGenerateNode}
-                                        onStop={confirmStopGeneration}
-                                        onImageSettingsOpenChange={(open) => {
-                                            setNodeImageSettingsOpen(open);
-                                            if (open) setToolbarNodeId(null);
-                                        }}
-                                    />
-                                )
-                            }
-                            renderNodeContent={(contentNode) => (
-                                <CanvasConfigNodePanel
-                                    node={contentNode}
-                                    isRunning={runningNodeId === contentNode.id}
-                                    inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
-                                    onConfigChange={handleConfigNodeChange}
-                                    onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
-                                    onStop={confirmStopGeneration}
-                                    onGenerate={(nodeId) => {
-                                        const target = nodesRef.current.find((item) => item.id === nodeId);
-                                        void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
-                                    }}
-                                />
-                            )}
+                            mentionReferences={mentionReferencesByNodeId.get(node.id) || EMPTY_REFERENCES}
+                            renderPanel={renderNodePanel}
+                            renderNodeContent={renderNodeContentPanel}
                             onMouseDown={handleNodeMouseDown}
                             onConnectStart={handleConnectStart}
                             onResize={handleNodeResize}
@@ -2552,14 +2580,10 @@ function InfiniteCanvasPage() {
                             onTitleChange={handleNodeTitleChange}
                             onToggleBatch={toggleBatchExpanded}
                             onSetBatchPrimary={setBatchPrimary}
-                            onRetry={(node) => void handleRetryNode(node)}
+                            onRetry={handleNodeRetry}
                             onGenerateImage={generateImageFromTextNode}
-                            onViewImage={(node) => setPreviewNodeId(node.id)}
-                            onContextMenu={(event, id) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setContextMenu({ type: "node", x: event.clientX, y: event.clientY, nodeId: id });
-                            }}
+                            onViewImage={handleNodeViewImage}
+                            onContextMenu={handleNodeContextMenu}
                         />
                     ))}
 
@@ -3101,10 +3125,9 @@ function getInputSummary(inputs: NodeGenerationInput[]) {
 }
 
 function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefined, mode: CanvasNodeGenerationMode): AiConfig {
-    const defaultModel = mode === "image" ? config.imageModel : mode === "video" ? config.videoModel : mode === "audio" ? config.audioModel : config.textModel;
     return {
         ...config,
-        model: node?.metadata?.model || defaultModel || (mode === "audio" ? defaultConfig.audioModel : config.model || defaultConfig.model),
+        model: resolveGenerationModel(config, node?.metadata?.model, mode),
         quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
         size: node?.metadata?.size || config.size || defaultConfig.size,
         videoSeconds: node?.metadata?.seconds || config.videoSeconds || defaultConfig.videoSeconds,

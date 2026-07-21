@@ -90,9 +90,11 @@ aiRoutes.post("/images/generations", async (c) => {
     const prompt = String(body.prompt || "");
     if (!prompt.trim()) return c.json({ error: "请输入提示词" }, 400);
     const isGptImage = isGptImageModel(request.model);
+    const nanoBanana = normalizeNanoBananaSettings(request.model, String(body.size || config.size || ""));
+    const seedream = normalizeSeedreamSettings(request.model, String(body.size || config.size || ""));
     const n = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(body.count ?? config.count)) || 1)));
     const quality = body.quality || config.quality;
-    const size = normalizeOpenAISize(String(body.size || config.size || ""), request.model);
+    const size = nanoBanana || seedream ? "" : normalizeOpenAISize(String(body.size || config.size || ""), request.model);
     const sizeError = validateGptImage2Size(request.model, size);
     if (sizeError) return c.json({ error: sizeError }, 400);
     const systemPrompt = config.systemPrompt?.trim();
@@ -108,6 +110,7 @@ aiRoutes.post("/images/generations", async (c) => {
                 generationConfig: {
                     responseModalities: ["TEXT", "IMAGE"],
                     candidateCount: 1,
+                    ...(nanoBanana ? { imageConfig: { ...(nanoBanana.resolution ? { imageSize: nanoBanana.resolution } : {}), aspectRatio: nanoBanana.aspect } } : {}),
                 },
             }),
         });
@@ -132,20 +135,20 @@ aiRoutes.post("/images/generations", async (c) => {
         body: JSON.stringify({
             model: request.model,
             prompt: finalPrompt,
-            n,
-            ...(quality && quality !== "auto" ? { quality } : {}),
-            ...(size ? { size } : {}),
-            ...(isGptImage ? {} : { response_format: "b64_json" }),
+            ...(seedream ? {} : { n }),
+            ...(!nanoBanana && !seedream && quality && quality !== "auto" ? { quality } : {}),
+            ...(seedream ? { size: seedream.size, response_format: "url", sequential_image_generation: "disabled", watermark: false } : nanoBanana ? { ...(nanoBanana.resolution ? { size: nanoBanana.resolution } : {}), aspect_ratio: nanoBanana.aspect } : size ? { size } : {}),
+            ...(isGptImage || seedream ? {} : { response_format: "b64_json" }),
             output_format: "png",
         }),
     });
     if (!response.ok) return c.json({ error: await readUpstreamError(response, "生图失败") }, 502);
-    const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
+    const data = (await response.json()) as { error?: unknown; data?: Array<{ b64_json?: string; url?: string; error?: unknown }> };
     const images = (data.data || []).map((item) => ({
         id: crypto.randomUUID(),
         dataUrl: item.b64_json ? `data:image/png;base64,${item.b64_json}` : item.url || "",
     })).filter((item) => item.dataUrl);
-    if (!images.length) return c.json({ error: "接口没有返回图片" }, 502);
+    if (!images.length) return c.json({ error: imageGenerationError(data) || "接口没有返回图片" }, 502);
     return c.json({ images });
 });
 
@@ -160,22 +163,43 @@ aiRoutes.post("/images/edits", async (c) => {
     const prompt = String(form.get("prompt") || "");
     const systemPrompt = config.systemPrompt?.trim();
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const seedream = normalizeSeedreamSettings(request.model, String(form.get("size") || config.size || ""));
+    const inputFiles = form.getAll("image").filter((value): value is File => value instanceof File);
+    if (seedream) {
+        if (form.get("mask") instanceof File) return c.json({ error: "Seedream 5.0 Lite 暂不支持蒙版编辑" }, 400);
+        if (inputFiles.length > 14) return c.json({ error: "Seedream 5.0 Lite 最多支持 14 张参考图" }, 400);
+        const images = await Promise.all(inputFiles.map(async (file) => `data:${file.type || "image/png"};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`));
+        const response = await fetch(buildApiUrl(request.baseUrl, "/images/generations"), {
+            method: "POST",
+            headers: openaiHeaders(request.apiKey, "application/json"),
+            body: JSON.stringify({ model: request.model, prompt: finalPrompt, image: images, size: seedream.size, response_format: "url", output_format: "png", sequential_image_generation: "disabled", watermark: false }),
+        });
+        if (!response.ok) return c.json({ error: await readUpstreamError(response, "Seedream 图生图失败") }, 502);
+        const data = (await response.json()) as { error?: unknown; data?: Array<{ b64_json?: string; url?: string; error?: unknown }> };
+        const generated = (data.data || []).map((item) => ({ id: crypto.randomUUID(), dataUrl: item.b64_json ? `data:image/png;base64,${item.b64_json}` : item.url || "" })).filter((item) => item.dataUrl);
+        if (!generated.length) return c.json({ error: imageGenerationError(data) || "Seedream 接口没有返回图片" }, 502);
+        return c.json({ images: generated });
+    }
     const upstream = new FormData();
     upstream.set("model", request.model);
     upstream.set("prompt", finalPrompt);
     const isGptImage = isGptImageModel(request.model);
-    const inputImageCount = form.getAll("image").filter((value): value is File => value instanceof File).length;
-    if (isGptImage && inputImageCount > 16) return c.json({ error: "GPT Image 模型最多支持 16 张参考图" }, 400);
+    const nanoBanana = normalizeNanoBananaSettings(request.model, String(form.get("size") || config.size || ""));
+    const inputImageCount = inputFiles.length;
+    const referenceLimit = nanoBanana?.referenceLimit || (isGptImage ? 16 : 0);
+    if (referenceLimit && inputImageCount > referenceLimit) return c.json({ error: `当前图片模型最多支持 ${referenceLimit} 张参考图` }, 400);
     const n = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(form.get("n") || config.count)) || 1)));
-    const size = normalizeOpenAISize(String(form.get("size") || config.size || ""), request.model);
+    const size = nanoBanana ? "" : normalizeOpenAISize(String(form.get("size") || config.size || ""), request.model);
     const sizeError = validateGptImage2Size(request.model, size);
     if (sizeError) return c.json({ error: sizeError }, 400);
     upstream.set("n", String(n));
     if (!isGptImage) upstream.set("response_format", "b64_json");
     upstream.set("output_format", "png");
     const quality = form.get("quality");
-    if (quality && quality !== "auto") upstream.set("quality", String(quality));
-    if (size) upstream.set("size", size);
+    if (!nanoBanana && quality && quality !== "auto") upstream.set("quality", String(quality));
+    if (nanoBanana?.resolution) upstream.set("size", nanoBanana.resolution);
+    if (nanoBanana) upstream.set("aspect_ratio", nanoBanana.aspect);
+    if (!nanoBanana && size) upstream.set("size", size);
     for (const [key, value] of form.entries()) {
         if (key === "image" || key === "mask") {
             if (value instanceof File) upstream.append(isGptImage && key === "image" ? "image[]" : key, value);
@@ -380,6 +404,49 @@ function publicArkContent(value: unknown, requestUrl: string, userId: string) {
         }
         return content;
     });
+}
+
+function normalizeNanoBananaSettings(model: string, size: string) {
+    const value = model.toLowerCase();
+    const isFlash = value.includes("gpt-image-gemini-3-flash") || value.includes("gemini-3.1-flash-image");
+    const isPro = value.includes("gpt-image-gemini-3-pro") || value.includes("gemini-3-pro-image");
+    const isOriginal = value.includes("gemini-2.5-flash-image");
+    if (!isFlash && !isPro && !isOriginal) return null;
+    const resolutions = isFlash ? ["512", "1K", "2K", "4K"] : isPro ? ["1K", "2K", "4K"] : [];
+    const commonAspects = ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+    const aspects = isFlash ? [...commonAspects, "1:4", "4:1", "1:8", "8:1", "9:21"] : commonAspects;
+    const match = size.match(/^(512|1K|2K|4K)@(\d+:\d+)$/i);
+    const requestedResolution = match?.[1].toUpperCase() || "";
+    const requestedAspect = match?.[2] || (/^\d+:\d+$/.test(size) ? size : "");
+    const defaultResolution = resolutions.includes("1K") ? "1K" : resolutions[0] || "";
+    return {
+        resolution: resolutions.includes(requestedResolution) ? requestedResolution : defaultResolution,
+        aspect: aspects.includes(requestedAspect) ? requestedAspect : aspects[0],
+        referenceLimit: isOriginal ? 3 : 14,
+    };
+}
+
+function normalizeSeedreamSettings(model: string, size: string) {
+    const value = model.toLowerCase();
+    if (!value.includes("seedream-5.0-lite") && !value.includes("seedream-5-0-lite")) return null;
+    const resolutions = ["2K", "3K", "4K"];
+    const aspects = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"];
+    const match = size.match(/^(2K|3K|4K)@(\d+:\d+)$/i);
+    const resolution = resolutions.includes(match?.[1].toUpperCase() || "") ? match![1].toUpperCase() : "2K";
+    const aspect = aspects.includes(match?.[2] || "") ? match![2] : "1:1";
+    const sizes = {
+        "2K": { "1:1": "2048x2048", "4:3": "2304x1728", "3:4": "1728x2304", "16:9": "2848x1600", "9:16": "1600x2848", "3:2": "2496x1664", "2:3": "1664x2496", "21:9": "3136x1344" },
+        "3K": { "1:1": "3072x3072", "4:3": "3456x2592", "3:4": "2592x3456", "16:9": "4096x2304", "9:16": "2304x4096", "3:2": "3744x2496", "2:3": "2496x3744", "21:9": "4704x2016" },
+        "4K": { "1:1": "4096x4096", "4:3": "4704x3520", "3:4": "3520x4704", "16:9": "5504x3040", "9:16": "3040x5504", "3:2": "4992x3328", "2:3": "3328x4992", "21:9": "6240x2656" },
+    } as const;
+    return { resolution, aspect, size: sizes[resolution as keyof typeof sizes][aspect as keyof (typeof sizes)["2K"]] };
+}
+
+function imageGenerationError(data: { error?: unknown; data?: Array<{ error?: unknown }> }) {
+    const error = data.error || data.data?.find((item) => item.error)?.error;
+    if (typeof error === "string") return error;
+    if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message || "");
+    return "";
 }
 
 function isGptImageModel(model: string) {

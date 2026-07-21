@@ -3,7 +3,7 @@ import { Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings
 import { Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, modelMatchesCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, resolveGenerationModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -121,14 +121,7 @@ function InputChip({ label, value, style }: { label: string; value: string; styl
 }
 
 function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasGenerationMode): AiConfig {
-    const defaultModel = mode === "image" ? globalConfig.imageModel : mode === "video" ? globalConfig.videoModel : mode === "audio" ? globalConfig.audioModel : globalConfig.textModel;
-    const fallbackModel = mode === "image" ? defaultConfig.imageModel : mode === "video" ? defaultConfig.videoModel : mode === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
-    const currentModel = node.metadata?.model;
-    const model = currentModel && modelMatchesCapability(currentModel, mode)
-        ? currentModel
-        : defaultModel && modelMatchesCapability(defaultModel, mode)
-            ? defaultModel
-            : fallbackModel;
+    const model = resolveGenerationModel(globalConfig, node.metadata?.model, mode);
     return {
         ...globalConfig,
         model,

@@ -289,13 +289,13 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <div className="absolute left-2 right-2 top-[-28px] z-[65] min-w-0 overflow-hidden" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                 {isEditingTitle ? (
                     <input
                         ref={titleInputRef}
                         value={titleDraft}
                         maxLength={64}
-                        className="h-6 max-w-full border-0 border-b border-dashed bg-transparent px-0 text-left text-xs font-medium outline-none"
+                        className="h-6 w-full min-w-0 border-0 border-b border-dashed bg-transparent px-0 text-left text-xs font-medium outline-none"
                         style={{ borderColor: theme.node.muted, color: theme.node.text }}
                         onChange={(event) => setTitleDraft(event.target.value)}
                         onBlur={finishTitleEditing}
@@ -310,9 +310,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                 ) : (
                     <button
                         type="button"
-                        className="block max-w-full truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
+                        className="block w-full truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
                         style={{ color: theme.node.text }}
-                        title="双击修改节点名称"
+                        title={data.title || "未命名节点"}
+                        aria-label={`${data.title || "未命名节点"}，双击修改节点名称`}
                         onDoubleClick={(event) => {
                             event.stopPropagation();
                             setIsEditingTitle(true);
@@ -503,6 +504,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
             {isEditingContent ? (
                 <CanvasResourceMentionTextarea
                     ref={textareaRef}
+                    data-canvas-no-zoom
                     className="thin-scrollbar block h-full w-full resize-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent pl-4 pr-14 pt-0 pb-4 m-0 font-mono outline-none select-text appearance-none"
                     style={textStyle}
                     value={node.metadata?.content || ""}
@@ -519,6 +521,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                 />
             ) : (
                 <div
+                    data-canvas-no-zoom
                     className="thin-scrollbar block h-full w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent pl-4 pr-14 pt-0 pb-4 font-mono"
                     style={textStyle}
                     onWheel={(event) => event.stopPropagation()}

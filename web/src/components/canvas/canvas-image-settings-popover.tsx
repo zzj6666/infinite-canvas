@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Settings2 } from "lucide-react";
 import { Button } from "antd";
 
-import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
+import { ImageSettingsPanel, imageSettingsSummary } from "@/components/image-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -25,9 +25,6 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const panelRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
-    const quality = config.quality || "auto";
-    const count = Math.max(1, Math.min(4, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const activeSize = config.size || "auto";
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);
@@ -63,7 +60,7 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
             <span ref={buttonRef} className="inline-flex min-w-0 max-w-full">
                 <Button size="small" type="text" className={buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"} style={{ background: open ? theme.toolbar.activeBg : theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5 shrink-0" />} onClick={() => updateOpen(!open)}>
                     <span className="min-w-0 truncate">
-                        {imageQualityLabel(quality)} · {imageSizeLabel(activeSize)} · {count} 张
+                        {imageSettingsSummary(config)}
                     </span>
                 </Button>
             </span>

@@ -140,6 +140,16 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
     return capability ? models.filter((model) => modelMatchesCapability(model, capability)) : models;
 }
 
+export function resolveGenerationModel(config: AiConfig, currentModel: string | undefined, capability: ModelCapability) {
+    const defaultModel = capability === "image" ? config.imageModel : capability === "video" ? config.videoModel : capability === "audio" ? config.audioModel : config.textModel;
+    const fallbackModel = capability === "image" ? defaultConfig.imageModel : capability === "video" ? defaultConfig.videoModel : capability === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
+    const configuredModels = config[modelListKey(capability)];
+    const matches = (model: string) => configuredModels.length ? configuredModels.includes(model) : modelMatchesCapability(model, capability);
+    if (currentModel && matches(currentModel)) return currentModel;
+    if (defaultModel && matches(defaultModel)) return defaultModel;
+    return configuredModels[0] || fallbackModel;
+}
+
 export function selectableModelsByCapability(config: AiConfig, capability?: ModelCapability) {
     if (!capability) return config.models;
     return config[modelListKey(capability)];
@@ -182,7 +192,7 @@ export const useConfigStore = create<ConfigStore>()((set, get) => ({
                     videoModel: normalizeModelOptionValue(incoming.videoModel || defaultConfig.videoModel, channels),
                     textModel: normalizeModelOptionValue(incoming.textModel || incoming.model, channels),
                     audioModel: normalizeModelOptionValue(incoming.audioModel || defaultConfig.audioModel, channels),
-                    imageModels: Array.isArray(incoming.imageModels) ? normalizeModelList(incoming.imageModels, channels) : filterModelsByCapability(models, "image"),
+                    imageModels: Array.isArray(incoming.imageModels) ? normalizeModelList(includeSeedreamModels(incoming.imageModels, models), channels) : filterModelsByCapability(models, "image"),
                     videoModels: Array.isArray(incoming.videoModels) ? normalizeModelList(incoming.videoModels, channels) : filterModelsByCapability(models, "video"),
                     textModels: Array.isArray(incoming.textModels) ? normalizeModelList(incoming.textModels, channels) : filterModelsByCapability(models, "text"),
                     audioModels: Array.isArray(incoming.audioModels) ? normalizeModelList(incoming.audioModels, channels) : filterModelsByCapability(models, "audio"),
@@ -351,6 +361,16 @@ function uniqueRawModels(models: string[]) {
 
 function uniqueModelOptions(models: string[]) {
     return Array.from(new Set((models || []).map((model) => model.trim()).filter(Boolean)));
+}
+
+export function includeSeedreamModels(current: string[], models: string[]) {
+    return uniqueModelOptions([
+        ...current,
+        ...models.filter((model) => {
+            const value = modelOptionName(model).toLowerCase();
+            return value.includes("seedream-5.0-lite") || value.includes("seedream-5-0-lite");
+        }),
+    ]);
 }
 
 export function buildApiUrl(baseUrl: string, path: string) {

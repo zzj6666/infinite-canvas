@@ -65,16 +65,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-canvas-no-zoom]")) return;
         if (target?.closest("[data-connection-create-menu]")) return;
-        const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
-
-        if (event.button === 0 && isBackgroundClick) {
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            onCanvasMouseDown?.(event);
-            return;
-        }
 
         if (event.button === 1) {
             event.preventDefault();
@@ -91,6 +82,13 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             return;
         }
 
+        if (target?.closest("[data-canvas-no-zoom]")) return;
+        const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
+        if (event.button === 0 && isBackgroundClick) {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            onCanvasMouseDown?.(event);
+        }
     };
 
     useEffect(() => {
@@ -137,7 +135,11 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const container = containerRef.current;
         if (!container) return;
 
-        const preventWheelScroll = (event: WheelEvent) => event.preventDefault();
+        const preventWheelScroll = (event: WheelEvent) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
+            event.preventDefault();
+        };
         container.addEventListener("wheel", preventWheelScroll, { passive: false });
         return () => container.removeEventListener("wheel", preventWheelScroll);
     }, [containerRef]);
